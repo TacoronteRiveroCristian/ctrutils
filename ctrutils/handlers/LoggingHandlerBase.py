@@ -22,7 +22,6 @@ class LoggingHandler:
     :param log_file: Ruta del archivo .log donde se guardarán los logs. Si no se especifica, los logs se muestran en consola.
     :type log_file: str, optional
 
-
     **Ejemplo de uso**:
 
     .. code-block:: python
@@ -35,7 +34,6 @@ class LoggingHandler:
         # Obtener el logger y registrar un mensaje
         logger = logging_handler.get_logger
         logger.info("Logs de prueba")
-
     """
 
     def __init__(
@@ -64,7 +62,7 @@ class LoggingHandler:
     @property
     def get_logger(self) -> logging.Logger:
         """
-        Getter para acceder al logger actual.
+        Accede al logger configurado para la instancia.
 
         :return: El logger actual configurado.
         :rtype: logging.Logger
@@ -74,7 +72,7 @@ class LoggingHandler:
     @property
     def get_log_format(self) -> str:
         """
-        Getter para acceder al formato de log actual.
+        Accede al formato de log actual.
 
         :return: El formato de log actual.
         :rtype: str
@@ -82,9 +80,9 @@ class LoggingHandler:
         return self._log_format
 
     @get_log_format.setter
-    def set_log_format(self, new_format: str) -> None:
+    def get_log_format(self, new_format: str) -> None:
         """
-        Setter para cambiar el formato de log actual.
+        Modifica el formato de log actual.
 
         :param new_format: El nuevo formato de log.
         :type new_format: str
@@ -99,7 +97,7 @@ class LoggingHandler:
 
     def configure_logger(self) -> logging.Logger:
         """
-        Configura un logger para la clase base.
+        Configura y devuelve un logger para la clase base.
 
         :return: Logger configurado.
         :rtype: logging.Logger
@@ -107,37 +105,38 @@ class LoggingHandler:
         logger = logging.getLogger(self.name)
         logger.setLevel(logging.INFO)
 
-        if self.log_file:
-            handler = self._create_file_handler()
-        else:
-            handler = self._create_stream_handler()
-
+        # Asignar el handler de archivo o de consola según `log_file`
+        handler: logging.Handler = (
+            self._create_file_handler()
+            if self.log_file
+            else self._create_stream_handler()
+        )
         logger.addHandler(handler)
+
         return logger
 
     def _create_log_directory(self) -> None:
         """
         Crea la carpeta para el archivo de log si no existe.
         """
-        log_dir = os.path.dirname(self.log_file)
+        log_dir = os.path.dirname(self.log_file or "")
 
-        if log_dir == "":
+        if not log_dir:
             log_dir = self.current_working_directory
-            self.log_file = os.path.join(log_dir, self.log_file)
-        else:
-            os.makedirs(log_dir, exist_ok=True)
+            self.log_file = os.path.join(log_dir, self.log_file or "default.log")
+
+        os.makedirs(log_dir, exist_ok=True)
 
     def _create_file_handler(self) -> logging.FileHandler:
         """
-        Crea y configura un `FileHandler` para el archivo .log.
+        Crea y configura un `FileHandler` para el archivo de log.
 
         :return: FileHandler configurado para registrar logs en el archivo especificado.
         :rtype: logging.FileHandler
         """
         self._create_log_directory()
-        file_handler = logging.FileHandler(self.log_file)
+        file_handler = logging.FileHandler(self.log_file or "default.log")
         file_handler.setFormatter(logging.Formatter(self.get_log_format))
-
         return file_handler
 
     def _create_stream_handler(self) -> logging.StreamHandler:
@@ -149,5 +148,4 @@ class LoggingHandler:
         """
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter(self.get_log_format))
-
         return stream_handler
