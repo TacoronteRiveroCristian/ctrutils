@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "ctutils"
-version = "0.1.0"
+name = "ctrutils"
+version = "0.1.4"
 description = "Libreria de utilidades varias"
 authors = ["CristianTacoronteRivero <tacoronteriverocristian@gmail.com>"]
 license = "MIT"
@@ -17,6 +17,7 @@ pylint = "^3.3.1"
 flake8 = "^7.1.1"
 black = "^24.10.0"
 pre-commit = "^4.0.1"
+ipykernel = "^6.29.5"
 
 [build-system]
 requires = ["poetry-core"]
