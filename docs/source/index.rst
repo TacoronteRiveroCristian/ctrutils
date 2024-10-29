@@ -1,7 +1,7 @@
 ¡Bienvenido a la documentación de ctrutils!
 ==========================================
 
-.. admonition:: ** Estado del Proyecto**
+.. admonition:: Estado del Proyecto
    :class: warning
 
    Este proyecto está **bajo desarrollo** y puede estar sujeto a cambios frecuentes. ¡Gracias por tu paciencia!
