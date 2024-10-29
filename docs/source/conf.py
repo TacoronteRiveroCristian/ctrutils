@@ -23,11 +23,11 @@ release = "1.0.2"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
-    "sphinx.ext.viewcode",
-    "sphinxcontrib.httpdomain",
-    "sphinx_copybutton",
-    "sphinx.ext.autosummary",
+    "autoapi.extension",
 ]
+
+autoapi_type = "python"
+autoapi_dirs = ["../../ctrutils"]
 
 
 templates_path = ["_templates"]

@@ -1918,21 +1918,6 @@ standalone = ["Sphinx (>=5)"]
 test = ["html5lib", "pytest"]
 
 [[package]]
-name = "sphinxcontrib-httpdomain"
-version = "1.8.1"
-description = "Sphinx domain for documenting HTTP APIs"
-optional = false
-python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*"
-files = [
-    {file = "sphinxcontrib-httpdomain-1.8.1.tar.gz", hash = "sha256:6c2dfe6ca282d75f66df333869bb0ce7331c01b475db6809ff9d107b7cdfe04b"},
-    {file = "sphinxcontrib_httpdomain-1.8.1-py2.py3-none-any.whl", hash = "sha256:21eefe1270e4d9de8d717cc89ee92cc4871b8736774393bafc5e38a6bb77b1d5"},
-]
-
-[package.dependencies]
-six = "*"
-Sphinx = ">=1.6"
-
-[[package]]
 name = "sphinxcontrib-jquery"
 version = "4.1"
 description = "Extension to include jQuery on newer Sphinx releases"
@@ -2167,4 +2152,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "aba8e764e7d9fb56d978d01bd453d03cce265f4c7a99e5a177d97c9cf28eac05"
+content-hash = "1c2cf5e9c88fcca5ce8f847ee41604245455b313ec1a359dc0d515b52b0bb242"
