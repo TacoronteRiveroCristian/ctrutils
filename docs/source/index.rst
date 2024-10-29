@@ -15,6 +15,6 @@ Documentación de API
 =====================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 5
 
    autoapi/index
