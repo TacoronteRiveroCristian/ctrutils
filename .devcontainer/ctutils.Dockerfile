@@ -31,5 +31,8 @@ COPY . .
 # Instalar las dependencias del proyecto sin instalar el paquete raíz
 RUN if [ -f "pyproject.toml" ]; then poetry install --no-root; fi
 
+# Configurar Poetry para no mostrar warnings
+RUN poetry config warnings.export false
+
 # Establecer el comando por defecto para ejecutar el contenedor en modo interactivo con bash
 CMD ["/bin/bash"]

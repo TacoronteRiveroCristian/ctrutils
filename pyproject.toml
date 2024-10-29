@@ -11,6 +11,8 @@ python = "^3.10"
 influxdb = "^5.3.2"
 pandas = "^2.2.3"
 types-python-dateutil = "^2.9.0.20241003"
+poetry-plugin-export = "^1.8.0"
+python-dateutil = "^2.9.0.post0"
 
 [tool.poetry.group.dev.dependencies]
 isort = "^5.13.2"
@@ -31,6 +33,7 @@ sphinx-autodoc2 = "^0.5.0"
 furo = "^2024.8.6"
 myst-parser = "^4.0.0"
 sphinx-design = "^0.6.1"
+types-python-dateutil = "^2.9.0.20241003"
 
 [build-system]
 requires = ["poetry-core"]

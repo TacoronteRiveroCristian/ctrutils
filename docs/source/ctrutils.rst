@@ -9,6 +9,7 @@ Subpackages
 
    ctrutils.database
    ctrutils.handlers
+   ctrutils.template
    ctrutils.utils
 
 Module contents

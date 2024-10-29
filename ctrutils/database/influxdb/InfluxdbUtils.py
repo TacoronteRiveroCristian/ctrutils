@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Union
 
-from dateutil.parser import parse
+from dateutil.parser import parse  # type: ignore
 from influxdb import InfluxDBClient
 
 
@@ -153,7 +153,10 @@ class InfluxdbUtils:
             date_obj = InfluxdbUtils.convert_to_datetime("2023-01-01T12:00:00")
             print(date_obj)  # datetime.datetime(2023, 1, 1, 12, 0)
         """
-        return parse(string_datetime)
+        dt_obj = parse(string_datetime)
+        if not isinstance(dt_obj, datetime):
+            raise ValueError("El valor no pudo ser convertido a un objeto datetime.")
+        return dt_obj
 
     @staticmethod
     def get_measurements_to_copy(client: InfluxDBClient) -> Dict[str, List[str]]:
