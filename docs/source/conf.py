@@ -29,7 +29,7 @@ extensions = [
 ]
 
 autoapi_type = "python"
-autoapi_dirs = [os.path.abspath("../ctrutils")]
+autoapi_dirs = ["../../ctrutils"]
 
 
 templates_path = ["_templates"]
