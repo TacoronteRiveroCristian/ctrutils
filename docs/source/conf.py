@@ -26,6 +26,10 @@ extensions = [
     "autoapi.extension",
     "sphinx.ext.viewcode",
     "myst_parser",
+    "sphinx.ext.napoleon",
+    "sphinx_copybutton",
+    "sphinx.ext.autosectionlabel",
+    "sphinx_design",
 ]
 
 autoapi_type = "python"
