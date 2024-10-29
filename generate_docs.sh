@@ -14,3 +14,6 @@ echo "Compilando documentación en HTML..."
 sphinx-build -b html "$DOCS_SOURCE_DIR" "$DOCS_BUILD_DIR"
 
 echo "Documentación generada con éxito en $DOCS_BUILD_DIR."
+
+poetry export -f requirements.txt --output requirements.txt
+echo "requirements.txt exportado."
