@@ -22,21 +22,23 @@ release = "1.0.2"
 
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
+    "sphinx_autodoc_typehints",
     "autoapi.extension",
+    "sphinx.ext.viewcode",
+    "myst_parser",
 ]
 
 autoapi_type = "python"
-autoapi_dirs = ["../../ctrutils"]
+autoapi_dirs = [os.path.abspath("../ctrutils")]
 
 
 templates_path = ["_templates"]
-exclude_patterns: list[str] = []
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 language = "es"
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "bizstyle"
+html_theme = "furo"
 html_static_path = ["_static"]
