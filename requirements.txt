@@ -8,8 +8,6 @@ cfgv==3.4.0
 charset-normalizer==3.4.0
 click==8.1.7
 comm==0.2.2
--e git+https://github.com/CristianTacoronteRivero/ctutils.git@2a89266b5fe218202436e01ed4f00195e0401610#egg=ctrutils
--e git+https://github.com/CristianTacoronteRivero/ctutils.git@2a89266b5fe218202436e01ed4f00195e0401610#egg=ctutils
 debugpy==1.8.7
 decorator==5.1.1
 dill==0.3.9
