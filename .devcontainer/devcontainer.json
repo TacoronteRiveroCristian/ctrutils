@@ -28,7 +28,8 @@
                 "donjayamanne.python-extension-pack",
                 "KevinRose.vsc-python-indent",
                 "ShaneLiesegang.vscode-simple-icons-rev",
-                "zhuangtongfa.material-theme"
+                "zhuangtongfa.material-theme",
+                "george-alisson.html-preview-vscode"
             ],
             "settings": {
                 "workbench.colorTheme": "One Dark Pro"

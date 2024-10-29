@@ -1,6 +1,17 @@
 # Usar tu imagen base
 FROM cristiantr/dev_container_image:latest
 
+# Actualizar el repositorio de paquetes e instalar los que sean necesarios
+RUN sudo apt update && sudo apt install -y locales
+
+# Generar el locale español para la documentación de la librería ctrutils
+RUN sudo locale-gen es_ES.UTF-8
+
+# Establecer el locale español como predeterminado
+ENV LANG=es_ES.UTF-8
+ENV LANGUAGE=es_ES:es
+ENV LC_ALL=es_ES.UTF-8
+
 # Instalar Poetry para la gestión de dependencias en Python
 RUN curl -sSL https://install.python-poetry.org | python3.10 -
 
