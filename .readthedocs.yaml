@@ -27,7 +27,14 @@ sphinx:
 # Optional but recommended, declare the Python requirements required
 # to build your documentation
 # See https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
+# Install dependencies
 python:
   install:
-    - method: poetry
+    - method: pip
       path: .
+    - method: pip
+      args: ["install", "poetry"]
+
+# Post-install commands to use Poetry for dependency management
+commands:
+  - poetry install --no-root
