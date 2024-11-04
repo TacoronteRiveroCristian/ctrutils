@@ -75,9 +75,9 @@ poetry build
 # Preguntar al usuario si desea publicar el paquete
 read -p "¿Desea publicar el paquete en PyPI? (s/n): " publish_response
 if [[ "$publish_response" =~ ^[sS]$ ]]; then
-    # Leer el token de API desde el archivo .key
-    if [[ -f "$PROJECT_ROOT/.key" ]]; then
-        api_token=$(cat "$PROJECT_ROOT/.key")
+    # Leer el token de API desde el archivo pypi.key
+    if [[ -f "$PROJECT_ROOT/.secrets/pypi.key" ]]; then
+        api_token=$(cat "$PROJECT_ROOT/.secrets/pypi.key")
         # Configurar Poetry con el token de API
         poetry config pypi-token.pypi $api_token
         # Publicar el paquete en PyPI
