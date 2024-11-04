@@ -32,12 +32,11 @@ class EmailSender:
 
     1. **Habilitar la autenticación en dos pasos**: Accede a la configuración de
        seguridad de tu cuenta de Google y activa la verificación en dos pasos.
-       :contentReference[oaicite:0]{index=0}
 
     2. **Generar una contraseña de aplicación**: Una vez habilitada la
        autenticación en dos pasos, dirígete a la sección de contraseñas de
        aplicaciones en tu cuenta de Google y crea una nueva contraseña para
-       utilizarla en esta aplicación. :contentReference[oaicite:1]{index=1}
+       utilizarla en esta aplicación.
 
     **Ejemplo de uso**:
 
