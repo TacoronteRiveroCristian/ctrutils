@@ -12,6 +12,14 @@ ctrutils.template.backup\_influxdb module
    :undoc-members:
    :show-inheritance:
 
+ctrutils.template.email\_sender module
+--------------------------------------
+
+.. automodule:: ctrutils.template.email_sender
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
