@@ -12,6 +12,14 @@ ctrutils.utils.DateUtils module
    :undoc-members:
    :show-inheritance:
 
+ctrutils.utils.TextUtils module
+-------------------------------
+
+.. automodule:: ctrutils.utils.TextUtils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
