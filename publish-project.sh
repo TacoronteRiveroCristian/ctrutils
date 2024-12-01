@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Directorios de origen y compilación
-PROJECT_ROOT=$(pwd)
+PROJECT_ROOT=$(WORKIDIR)
 DOCS_SOURCE_DIR="$PROJECT_ROOT/docs/source"
 DOCS_BUILD_DIR="$PROJECT_ROOT/docs/build/html"
 
@@ -90,4 +90,4 @@ else
     echo "Publicación cancelada por el usuario."
 fi
 
-echo "Proceso completado."
+echo "Proceso finalizado."
