@@ -882,9 +882,9 @@ pyflakes==3.2.0 ; python_version >= "3.10" and python_version < "4.0" \
 pygments==2.18.0 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:786ff802f32e91311bff3889f6e9a86e81505fe99f2735bb6d60ae0c5004f199 \
     --hash=sha256:b8e6aca0523f3ab76fee51799c488e38782ac06eafcf95e7ba832985c8e7b13a
-pylint==3.3.1 ; python_version >= "3.10" and python_version < "4.0" \
-    --hash=sha256:2f846a466dd023513240bc140ad2dd73bfc080a5d85a710afdb728c420a5a2b9 \
-    --hash=sha256:9f3dcc87b1203e612b78d91a896407787e708b3f189b5fa0b307712d49ff0c6e
+pylint==3.3.2 ; python_version >= "3.10" and python_version < "4.0" \
+    --hash=sha256:77f068c287d49b8683cd7c6e624243c74f92890f767f106ffa1ddf3c0a54cb7a \
+    --hash=sha256:9ec054ec992cd05ad30a6df1676229739a73f8feeabf3912c995d17601052b01
 pyproject-hooks==1.2.0 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8 \
     --hash=sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913
