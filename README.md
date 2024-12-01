@@ -17,4 +17,4 @@ Si tienes alguna pregunta o sugerencia, no dudes en contactarnos a traves de [Gi
 
 ## 📜 Licencia
 
-Este proyecto está bajo siguiente [licencia](https://github.com/TacoronteRiveroCristian/ctrutils/blob/main/LICENSE).
+Este proyecto está bajo la siguiente [licencia](https://github.com/TacoronteRiveroCristian/ctrutils/blob/main/LICENSE).
