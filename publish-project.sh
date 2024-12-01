@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Directorios de origen y compilación
-PROJECT_ROOT=$(WORKIDIR)
+PROJECT_ROOT=$(WORKDIR)
 DOCS_SOURCE_DIR="$PROJECT_ROOT/docs/source"
 DOCS_BUILD_DIR="$PROJECT_ROOT/docs/build/html"
 
