@@ -1,6 +1,6 @@
 """
-Este módulo proporciona la clase `InfluxdbOperation` para manejar operaciones en una base de datos
-InfluxDB utilizando un cliente `InfluxDBClient`. La clase incluye métodos para cambiar de base de datos,
+Este modulo proporciona la clase `InfluxdbOperation` para manejar operaciones en una base de datos
+InfluxDB utilizando un cliente `InfluxDBClient`. La clase incluye metodos para cambiar de base de datos,
 ejecutar consultas, escribir datos en InfluxDB, y formatear valores para escritura.
 """
 
@@ -16,7 +16,7 @@ class InfluxdbOperation(InfluxdbConnection):
     """
     Clase para manejar operaciones en la base de datos InfluxDB con un cliente `InfluxDBClient`.
 
-    Esta clase hereda de `InfluxdbConnection` y proporciona métodos adicionales para realizar
+    Esta clase hereda de `InfluxdbConnection` y proporciona metodos adicionales para realizar
     consultas, escribir puntos en la base de datos, y cambiar la base de datos de trabajo.
 
     **Ejemplo de uso**:
@@ -25,7 +25,7 @@ class InfluxdbOperation(InfluxdbConnection):
 
         from ctrutils.database.influxdb import InfluxdbOperation
 
-        # Crear una conexión y realizar operaciones en InfluxDB
+        # Crear una conexion y realizar operaciones en InfluxDB
         influxdb_op = InfluxdbOperation(host="localhost", port=8086, timeout=10)
 
         # Cambiar la base de datos activa
@@ -39,13 +39,13 @@ class InfluxdbOperation(InfluxdbConnection):
         # Escribir datos en InfluxDB
         influxdb_op.write_points(measurement="my_measurement", data=data)
 
-    :param host: La dirección del host de InfluxDB.
+    :param host: La direccion del host de InfluxDB.
     :type host: str
-    :param port: El puerto de conexión a InfluxDB.
+    :param port: El puerto de conexion a InfluxDB.
     :type port: Union[int, str]
-    :param timeout: El tiempo de espera para la conexión en segundos. Por defecto es 5 segundos.
+    :param timeout: El tiempo de espera para la conexion en segundos. Por defecto es 5 segundos.
     :type timeout: Optional[Union[int, float]]
-    :param kwargs: Parámetros adicionales para la conexión a InfluxDB.
+    :param kwargs: Parametros adicionales para la conexion a InfluxDB.
     :type kwargs: Any
     """
 
@@ -57,15 +57,15 @@ class InfluxdbOperation(InfluxdbConnection):
         **kwargs: Any,
     ):
         """
-        Inicializa la clase `InfluxdbOperation` y establece una conexión con InfluxDB.
+        Inicializa la clase `InfluxdbOperation` y establece una conexion con InfluxDB.
 
-        :param host: La dirección del host de InfluxDB.
+        :param host: La direccion del host de InfluxDB.
         :type host: str
-        :param port: El puerto de conexión a InfluxDB.
+        :param port: El puerto de conexion a InfluxDB.
         :type port: Union[int, str]
-        :param timeout: El tiempo de espera para la conexión en segundos. Por defecto es 5 segundos.
+        :param timeout: El tiempo de espera para la conexion en segundos. Por defecto es 5 segundos.
         :type timeout: Optional[Union[int, float]]
-        :param kwargs: Parámetros adicionales para la conexión a InfluxDB.
+        :param kwargs: Parametros adicionales para la conexion a InfluxDB.
         :type kwargs: Any
         """
         super().__init__(host=host, port=port, timeout=timeout, **kwargs)
@@ -122,7 +122,7 @@ class InfluxdbOperation(InfluxdbConnection):
         db_to_use = database or self._database
         if db_to_use is None:
             raise ValueError(
-                "Debe proporcionar una base de datos o establecerla mediante el método 'switch_database'."
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
             )
         self.switch_database(db_to_use)
 
@@ -139,25 +139,6 @@ class InfluxdbOperation(InfluxdbConnection):
             df = df.set_index("time")
 
         return df
-
-    def check_value_format_to_write(self, value: Any) -> bool:
-        """
-        Verifica si el valor es adecuado para ser escrito en InfluxDB.
-
-        :param value: Valor a verificar.
-        :type value: Any
-        :return: `True` si el valor es válido para escritura, `False` en caso contrario.
-        :rtype: bool
-
-        **Ejemplo de uso**:
-
-        .. code-block:: python
-
-            influxdb_op = InfluxdbOperation(host="localhost", port=8086)
-            is_valid = influxdb_op.check_value_format_to_write(42)
-            print(is_valid)  # True
-        """
-        return not (value is None or pd.isna(value))
 
     def normalize_value_to_write(self, value: Any) -> Any:
         """
@@ -187,26 +168,17 @@ class InfluxdbOperation(InfluxdbConnection):
 
     def write_points(
         self,
-        measurement: Optional[str] = None,
-        data: Optional[pd.DataFrame] = None,
-        points: Optional[list] = None,
+        points: list,
         database: Optional[str] = None,
-        tags: Optional[dict] = None,
     ) -> None:
         """
-        Escribe datos en InfluxDB desde un DataFrame o una lista de puntos.
+        Escribe una lista de puntos directamente en InfluxDB.
 
-        :param measurement: Nombre de la medida en InfluxDB. Obligatorio si se proporciona un DataFrame.
-        :type measurement: Optional[str]
-        :param data: DataFrame de pandas con los datos a escribir en InfluxDB.
-        :type data: Optional[pd.DataFrame]
-        :param points: Lista de puntos a escribir directamente en InfluxDB. Si se proporciona, `data` no es necesario.
-        :type points: Optional[list]
-        :param database: El nombre de la base de datos en la que se escribirán los datos.
+        :param points: Lista de puntos a escribir en InfluxDB.
+        :type points: list
+        :param database: El nombre de la base de datos en la que se escribiran los datos.
         :type database: Optional[str]
-        :param tags: Diccionario de tags a asociar a los datos.
-        :type tags: Optional[dict]
-        :raises ValueError: Si no se proporciona ni `data` ni `points`.
+        :raises ValueError: Si no se proporciona una lista de puntos.
 
         **Ejemplo de uso**:
 
@@ -215,52 +187,91 @@ class InfluxdbOperation(InfluxdbConnection):
             influxdb_op = InfluxdbOperation(host="localhost", port=8086)
             influxdb_op.switch_database("mi_base_de_datos")
 
-            # Crear un DataFrame para escribir en InfluxDB
-            data = pd.DataFrame({
-                "time": pd.date_range(start="2023-01-01", periods=5, freq="D"),
-                "value": [10, 20, 30, 40, 50]
-            })
-            data.set_index("time", inplace=True)
+            points = [
+                {"measurement": "my_measurement", "fields": {"value": 10}, "time": "2023-01-01T00:00:00Z"},
+                {"measurement": "my_measurement", "fields": {"value": 20}, "time": "2023-01-02T00:00:00Z"}
+            ]
 
-            influxdb_op.write_points(measurement="my_measurement", data=data)
+            influxdb_op.write_points(points=points)
         """
         db_to_use = database or self._database
         if db_to_use is None:
             raise ValueError(
-                "Debe proporcionar una base de datos o establecerla mediante el método 'switch_database'."
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
             )
         self.switch_database(db_to_use)
 
-        if points is None:
-            if data is None or measurement is None:
-                raise ValueError(
-                    "Debe proporcionar un DataFrame 'data' y un 'measurement' o una lista de 'points'."
-                )
+        if not points:
+            raise ValueError("La lista de puntos no puede estar vacia.")
 
-            if "time" not in data.columns:
-                data["time"] = pd.to_datetime(data.index, format="mixed")
-            points = data.to_dict(orient="records")
+        self._client.write_points(points=points, database=db_to_use, batch_size=5000)
 
-            points_list = []
-            for record in points:
+    def write_dataframes(
+        self,
+        measurement: str,
+        data: pd.DataFrame,
+        tags: Optional[dict] = None,
+        database: Optional[str] = None,
+    ) -> list:
+        """
+        Convierte un DataFrame en una lista de puntos en el formato adecuado para escribir en InfluxDB.
+
+        :param measurement: Nombre de la medida en InfluxDB.
+        :type measurement: str
+        :param data: DataFrame de pandas con los datos a convertir.
+        :type data: pd.DataFrame
+        :param tags: Diccionario de tags a asociar a los puntos.
+        :type tags: Optional[dict]
+        :param database: El nombre de la base de datos en la que se escribiran los datos.
+        :type database: Optional[str]
+        :return: Lista de puntos formateados para InfluxDB.
+        :rtype: list
+        :raises ValueError: Si no se proporciona un DataFrame o el nombre de la medida.
+
+        **Ejemplo de uso**:
+
+        .. code-block:: python
+
+            influxdb_op = InfluxdbOperation(host="localhost", port=8086)
+
+            data = pd.DataFrame({
+                "value": [10, 20, 30, 40, 50],
+                "other_field": [100, 200, 300, 400, 500]
+            }, index=pd.date_range(start="2023-01-01", periods=5, freq="D"))
+
+            points = influxdb_op.write_dataframes(measurement="my_measurement", data=data)
+            print(points)
+        """
+        # Comprobar que se proporcionaron los argumentos necesarios
+        if data is None or measurement is None:
+            raise ValueError(
+                "Debe proporcionar un DataFrame 'data' y un 'measurement'."
+            )
+
+        # Asegurarse de que el indice del dataframe sea de tipo datetime
+        if not isinstance(data.index, pd.DatetimeIndex):
+            data.index = pd.to_datetime(data.index)
+
+        # Crear lista de puntos a partir del dataframe
+        points = []
+        for index, row in data.iterrows():
+            # Filtrar los campos validos: excluir NaN y valores no soportados
+            fields = {
+                field: self.normalize_value_to_write(value)
+                for field, value in row.items()
+                if pd.notna(value) and isinstance(value, (int, float, bool))
+            }
+
+            # Solo agregar el punto si tiene campos validos
+            if fields:
                 point = {
-                    "time": self._influxdb_utils.convert_to_influxdb_iso(
-                        record.pop("time")
-                    ),
-                    "fields": {
-                        field: self.normalize_value_to_write(value)
-                        for field, value in record.items()
-                    },
+                    "time": self._influxdb_utils.convert_to_influxdb_iso(index),
+                    "fields": fields,
                     "measurement": measurement,
                 }
                 if tags:
                     point["tags"] = tags
+                points.append(point)
 
-                if point["fields"]:
-                    points_list.append(point)
-        else:
-            points_list = points
-
-        self._client.write_points(
-            points=points_list, database=database, batch_size=5000
-        )
+        # Registar lista de puntos
+        self.write_points(points=points, database=database)

@@ -1,11 +1,11 @@
 """
-Este módulo contiene la clase `BackupInfluxdb`, que permite realizar una copia completa de todas las bases de datos
-de un servidor remoto de InfluxDB hacia un servidor local de InfluxDB. La clase gestiona la conexión
-con los servidores de origen y destino y utiliza consultas para copiar solo los datos que no estén
+Este modulo contiene la clase `BackupInfluxdb`, que permite realizar una copia completa de todas las bases de datos
+de un servidor remoto de InfluxDB hacia un servidor local de InfluxDB. La clase gestiona la conexion
+con los servidores de origen y destino y utiliza consultas para copiar solo los datos que no esten
 presentes en el servidor de destino, optimizando el proceso de transferencia.
 
 Uso:
-    Ejecuta este módulo directamente para iniciar el proceso de copia de bases de datos:
+    Ejecuta este modulo directamente para iniciar el proceso de copia de bases de datos:
 
     ```bash
     python influxdb_backup_template.py
@@ -22,7 +22,7 @@ from ctrutils.handlers.LoggingHandlerBase import LoggingHandler
 # Ruta del fichero de logs
 LOG_FILE = "/path/to/backup_to_delphos.log"
 
-# Configuración del cliente InfluxDB de origen
+# Configuracion del cliente InfluxDB de origen
 INFLUXDB_SOURCE: Dict[str, Union[str, int]] = {
     "host": "localhost",
     "port": 8086,
@@ -36,12 +36,13 @@ INFLUXDB_DESTINATION: Dict[str, Union[str, int]] = {
 
 class BackupInfluxdb:
     """
-    Clase para la copia completa de todas las bases de datos que se encuentran en un servidor remoto de InfluxDB
-    hacia un servidor de destino. Gestiona la conexión con los servidores, obtiene las bases de datos y mediciones
-    que deben copiarse y realiza el traspaso de los datos.
+    Clase para copiar todas las bases de datos de un servidor remoto de InfluxDB a un servidor de destino.
 
-    :ivar logging: Manejador de logs para registrar eventos del proceso.
-    :vartype logging: LoggingHandler
+    Esta clase gestiona la conexion con los servidores de origen y destino, obtiene las bases de datos y mediciones
+    que deben copiarse, y realiza la transferencia de los datos.
+
+    :ivar logger: Manejador de logs para registrar eventos del proceso.
+    :vartype logger: logging.Logger
     :ivar error: Manejador de errores para gestionar excepciones y registrar fallos.
     :vartype error: ErrorHandler
     :ivar influx_utils: Utilidades para operaciones con InfluxDB.
@@ -57,13 +58,12 @@ class BackupInfluxdb:
     def __init__(self) -> None:
         """
         Inicializa la clase BackupInfluxdb y configura los manejadores de logs y errores,
-        así como las utilidades de InfluxDB.
+        asi como las utilidades de InfluxDB.
         """
-        self.logging = LoggingHandler(
+        self.logger = LoggingHandler().configure_logger(
             name=self.__class__.__name__,
             log_file=LOG_FILE,
         )
-        self.logger = self.logging.get_logger  # Manejador del logger
         self.error = ErrorHandler()
         self.influx_utils = InfluxdbUtils()
 
@@ -93,7 +93,7 @@ class BackupInfluxdb:
             )
         except Exception:
             txt_error = "Error al crear los clientes."
-            self.error.handle_error(txt_error, self.logger)
+            self.error.throw_error(txt_error, self.logger)
         else:
             if self.source_client and self.destination_client:
                 self.logger.info(
@@ -122,7 +122,7 @@ class BackupInfluxdb:
         """
         Obtiene las claves necesarias de un measurement para realizar la media de las variables.
 
-        :param measurement: Nombre de la medición.
+        :param measurement: Nombre de la medicion.
         :return: Diccionario con las claves para realizar la consulta de media.
         """
         if self.source_client:
@@ -139,7 +139,7 @@ class BackupInfluxdb:
         """
         Comprueba si ya existen datos en el servidor destino para evitar duplicados.
 
-        :param measurement: Nombre de la medición.
+        :param measurement: Nombre de la medicion.
         :return: Última fecha/hora registrada en el servidor destino, o None si no existen datos.
         """
         if not self.destination_client:
@@ -166,7 +166,7 @@ class BackupInfluxdb:
         Construye las consultas para la copia de los datos.
 
         :param selectors: Claves y operaciones para los campos a copiar.
-        :param measurement: Nombre de la medición.
+        :param measurement: Nombre de la medicion.
         :return: Lista de consultas SQL para obtener y copiar los datos.
         """
         querys = []
@@ -191,7 +191,7 @@ class BackupInfluxdb:
         Lee datos del servidor de origen y los escribe en el servidor de destino.
 
         :param querys: Lista de consultas SQL para obtener los datos.
-        :param measurement: Nombre de la medición donde se almacenarán los datos.
+        :param measurement: Nombre de la medicion donde se almacenaran los datos.
         """
         if self.source_client and self.destination_client:
             for index, query in enumerate(querys, start=1):
@@ -202,7 +202,7 @@ class BackupInfluxdb:
                     self.logger.info(f"\t\t\t\t{len(data)} registro/s escritos.")
                 except Exception:
                     txt_error = "Error al obtener o escribir los datos."
-                    self.error.handle_error(txt_error, self.logger)
+                    self.error.throw_error(txt_error, self.logger)
         else:
             self.logger.error("Clientes de InfluxDB no inicializados.")
 
@@ -233,7 +233,7 @@ class BackupInfluxdb:
 
             self.logger.info(f"Copiando registros de la base de datos '{database}'...")
 
-            # Copia cada medición dentro de la base de datos actual
+            # Copia cada medicion dentro de la base de datos actual
             for measurement in measurements:
                 self.logger.info(f"\tCopiando tabla '{measurement}'...")
                 selectors = self.get_selectors_to_do_average(measurement)
@@ -250,7 +250,7 @@ class BackupInfluxdb:
             self.copy_databases()
         except Exception:
             txt_error = "Error al ejecutar el proceso de copia de datos."
-            self.error.handle_error(txt_error, self.logger)
+            self.error.throw_error(txt_error, self.logger)
 
         self.logger.info("Proceso finalizado de copia de datos.\n")
 

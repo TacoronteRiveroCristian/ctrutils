@@ -90,4 +90,4 @@ else
     echo "Publicación cancelada por el usuario."
 fi
 
-echo "Proceso completado."
+echo "Proceso finalizado."

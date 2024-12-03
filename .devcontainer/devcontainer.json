@@ -1,14 +1,16 @@
 {
-    "name": "ctutils Development Container",
+    "name": "ctrutils Development Container",
     "build": {
-        "dockerfile": "ctutils.Dockerfile",
-        "context": ".."
+        "dockerfile": "ctrutils.Dockerfile",
+        "context": "..",
+        "cacheFrom": "type=local,mode=max,src=${localWorkspaceFolder}/.devcontainer"
     },
     "runArgs": [
-        "--name=ctutils-dev-container",
+        "--name=ctrutils-dev-container",
         "--network=host"
     ],
     "remoteUser": "dev_container",
+    "workspaceFolder": "/workspaces/ctrutils",
     "initializeCommand": "docker pull cristiantr/dev_container_image:latest",
     "customizations": {
         "vscode": {
