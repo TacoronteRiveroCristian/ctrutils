@@ -69,17 +69,3 @@ class ErrorHandler:
         # Imprimir el mensaje en stderr y finalizar el programa
         print(final_message, file=sys.stderr)
         sys.exit(1)
-
-    def throw_warning(self, message: str, logger: logging.Logger) -> None:
-        """
-        Maneja advertencias registrandolas en el logger.
-
-        Este metodo registra el mensaje proporcionado como advertencia en el logger especificado.
-
-        :param message: Mensaje de advertencia a registrar.
-        :type message: str
-        :param logger: Logger que se utilizara para registrar la advertencia. Este logger debe estar configurado
-                       previamente para manejar los mensajes de advertencia.
-        :type logger: logging.Logger
-        """
-        logger.warning(message)

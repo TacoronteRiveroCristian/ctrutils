@@ -97,7 +97,7 @@ class InfluxdbUtils:
 
         if isinstance(fields, dict):
             for field_type, field_list in fields.items():
-                if field_type == "boolean":
+                if field_type == "boolean" or field_type == "integer":
                     query_parts = [f'"{field}"' for field in field_list]
                 else:
                     query_parts = [

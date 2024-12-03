@@ -34,16 +34,23 @@ RUN chown -R dev_container:dev_container ${WORKDIR} && \
     chmod -R 770 ${WORKDIR} && \
     chmod 600 ${WORKDIR}/.env
 
+# Enlazar python3 con python ya que poetry usa por defecto python y solamente esta python3
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 # Cambiar al usuario sin privilegios
 USER dev_container
 
 # Instalar Poetry para la gestión de dependencias en Python
-RUN curl -sSL https://install.python-poetry.org | python3.10 -
+RUN curl -sSL https://install.python-poetry.org | python3 -
 # Añadir Poetry al PATH permanentemente para el usuario dev_container
 ENV PATH="/home/dev_container/.local/bin:$PATH"
 
 # Instalar las dependencias del proyecto sin instalar el paquete raíz
-RUN if [ -f "pyproject.toml" ]; then poetry install --no-root; fi
+RUN if [ -f "pyproject.toml" ]; then \
+    poetry --version && \
+    poetry install --no-root; \
+    else echo "pyproject.toml no encontrado"; fi
+
 
 # Establecer el comando por defecto para ejecutar el contenedor en modo interactivo con bash
 CMD ["/bin/bash"]
