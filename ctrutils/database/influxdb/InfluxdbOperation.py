@@ -159,8 +159,10 @@ class InfluxdbOperation(InfluxdbConnection):
         """
         if isinstance(value, bool):
             return value
-        elif isinstance(value, (int, float)):
+        elif isinstance(value, float):
             return float(value)
+        elif isinstance(value, int):
+            return int(value)
         elif isinstance(value, str):
             return value
         else:
@@ -206,7 +208,7 @@ class InfluxdbOperation(InfluxdbConnection):
 
         self._client.write_points(points=points, database=db_to_use, batch_size=5000)
 
-    def write_dataframes(
+    def write_dataframe(
         self,
         measurement: str,
         data: pd.DataFrame,
