@@ -157,13 +157,9 @@ class InfluxdbOperation(InfluxdbConnection):
             normalized_value = influxdb_op.normalize_value_to_write(42)
             print(normalized_value)  # 42.0
         """
-        if isinstance(value, bool):
-            return value
-        elif isinstance(value, float):
+        if isinstance(value, (bool, int)):
             return float(value)
-        elif isinstance(value, int):
-            return int(value)
-        elif isinstance(value, str):
+        elif isinstance(value, float):
             return value
         else:
             return value
@@ -214,40 +210,75 @@ class InfluxdbOperation(InfluxdbConnection):
         data: pd.DataFrame,
         tags: Optional[dict] = None,
         database: Optional[str] = None,
+        pass_to_float: bool = True,
     ) -> list:
         """
         Convierte un DataFrame en una lista de puntos en el formato adecuado para escribir en InfluxDB.
 
         :param measurement: Nombre de la medida en InfluxDB.
         :type measurement: str
-        :param data: DataFrame de pandas con los datos a convertir.
+        :param data: DataFrame de pandas con los datos a convertir. Todas las columnas deben contener únicamente valores de tipo int, float o bool. Los valores NaN son permitidos.
         :type data: pd.DataFrame
         :param tags: Diccionario de tags a asociar a los puntos.
         :type tags: Optional[dict]
-        :param database: El nombre de la base de datos en la que se escribiran los datos.
+        :param database: El nombre de la base de datos en la que se escribirán los datos.
         :type database: Optional[str]
+        :param pass_to_float: Si es True, convierte valores int y bool a float antes de escribirlos en InfluxDB. Por defecto es True.
+        :type pass_to_float: bool
         :return: Lista de puntos formateados para InfluxDB.
         :rtype: list
-        :raises ValueError: Si no se proporciona un DataFrame o el nombre de la medida.
+        :raises ValueError:
+            - Si no se proporciona un DataFrame o el nombre de la medida.
+            - Si alguna columna del DataFrame contiene valores que no sean de tipo int, float o bool (excluyendo NaN).
+        :raises ValueError: Si el índice del DataFrame no es convertible a un índice de tipo datetime.
+
+        **Notas**:
+            - El índice del DataFrame debe ser de tipo datetime para garantizar la compatibilidad con InfluxDB.
+            - Solo las columnas con valores de tipo int, float y bool (o NaN) serán procesadas.
+            - Los valores NaN serán excluidos al convertir los datos a puntos.
 
         **Ejemplo de uso**:
 
         .. code-block:: python
 
+            import pandas as pd
+            from influxdb_client import InfluxdbOperation
+
             influxdb_op = InfluxdbOperation(host="localhost", port=8086)
 
             data = pd.DataFrame({
-                "value": [10, 20, 30, 40, 50],
-                "other_field": [100, 200, 300, 400, 500]
+                "value": [10, 20, None, 40, 50],
+                "other_field": [True, False, None, True, False]
             }, index=pd.date_range(start="2023-01-01", periods=5, freq="D"))
 
-            points = influxdb_op.write_dataframes(measurement="my_measurement", data=data)
+            points = influxdb_op.write_dataframe(
+                measurement="my_measurement",
+                data=data,
+                tags={"location": "test_site"}
+            )
             print(points)
         """
+
         # Comprobar que se proporcionaron los argumentos necesarios
         if data is None or measurement is None:
             raise ValueError(
                 "Debe proporcionar un DataFrame 'data' y un 'measurement'."
+            )
+
+        # Verificar que las columnas del DataFrame contienen solo tipos permitidos
+        allowed_types = (int, float, bool)
+        invalid_columns = [
+            col
+            for col in data.columns
+            if not all(
+                isinstance(val, allowed_types) or pd.isna(val) for val in data[col]
+            )
+        ]
+
+        if invalid_columns:
+            raise ValueError(
+                f"Las siguientes columnas tienen valores con tipos no permitidos "
+                f"({', '.join(map(str, invalid_columns))}). Solo se permiten int, float y bool."
             )
 
         # Asegurarse de que el indice del dataframe sea de tipo datetime
@@ -259,9 +290,9 @@ class InfluxdbOperation(InfluxdbConnection):
         for index, row in data.iterrows():
             # Filtrar los campos validos: excluir NaN y valores no soportados
             fields = {
-                field: self.normalize_value_to_write(value)
+                field: self.normalize_value_to_write(value) if pass_to_float else value
                 for field, value in row.items()
-                if pd.notna(value) and isinstance(value, (int, float, bool))
+                if pd.notna(value)
             }
 
             # Solo agregar el punto si tiene campos validos
