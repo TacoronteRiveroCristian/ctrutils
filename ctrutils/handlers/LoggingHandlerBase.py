@@ -47,6 +47,7 @@ class LoggingHandler:
         self._log_format: str = (
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
+        self.logger: Optional[logging.Logger] = None
 
     @property
     def log_format(self) -> str:
@@ -188,8 +189,8 @@ class LoggingHandler:
             logger_file.info("Este mensaje se registra en un archivo con rotacion diaria.")
         """
         logger_name = name or "LoggingHandler"
-        logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.INFO)
+        self.logger = logging.getLogger(logger_name)
+        self.logger.setLevel(logging.INFO)
 
         # Configurar el handler adecuado
         if log_file and log_retention_period:
@@ -203,17 +204,22 @@ class LoggingHandler:
         else:
             handler = self._create_stream_handler()
 
-        logger.addHandler(handler)
-        return logger
+        self.logger.addHandler(handler)
+        return self.logger
 
-    @staticmethod
-    def remove_logger_handlers(logger: logging.Logger) -> None:
+    def remove_logger_handlers(self) -> None:
         """
-        Elimina todos los handlers asociados a un logger para liberar recursos.
+        Elimina todos los handlers asociados al logger de la instancia para liberar recursos.
 
-        :param logger: Logger del cual se eliminarán los handlers.
-        :type logger: logging.Logger
+        :raises ValueError: Si no se ha configurado ningun logger previamente.
         """
-        for handler in logger.handlers[:]:
-            logger.removeHandler(handler)
+        if not self.logger:
+            raise ValueError(
+                "No se ha configurado ningun logger para esta instancia."
+            )
+
+        for handler in self.logger.handlers[:]:
+            self.logger.removeHandler(handler)
             handler.close()
+
+        self.logger = None
