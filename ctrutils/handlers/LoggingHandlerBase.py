@@ -44,7 +44,9 @@ class LoggingHandler:
         """
         Inicializa una instancia de LoggingHandler con configuraciones basicas.
         """
-        self._log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        self._log_format: str = (
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
 
     @property
     def log_format(self) -> str:
@@ -203,3 +205,15 @@ class LoggingHandler:
 
         logger.addHandler(handler)
         return logger
+
+    @staticmethod
+    def remove_logger_handlers(logger: logging.Logger) -> None:
+        """
+        Elimina todos los handlers asociados a un logger para liberar recursos.
+
+        :param logger: Logger del cual se eliminarán los handlers.
+        :type logger: logging.Logger
+        """
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+            handler.close()
