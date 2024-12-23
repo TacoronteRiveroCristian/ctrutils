@@ -126,8 +126,12 @@ class InfluxdbOperation(InfluxdbConnection):
             )
         self.switch_database(db_to_use)
 
-        result_set = self._client.query(query=query, chunked=True, chunk_size=5000)
-        data_list = [point for chunk in result_set for point in chunk.get_points()]
+        result_set = self._client.query(
+            query=query, chunked=True, chunk_size=5000
+        )
+        data_list = [
+            point for chunk in result_set for point in chunk.get_points()
+        ]
 
         if not data_list:
             raise ValueError(
@@ -137,6 +141,9 @@ class InfluxdbOperation(InfluxdbConnection):
         df = pd.DataFrame(data_list)
         if "time" in df.columns:
             df = df.set_index("time")
+
+        # Asegurarse de que el indice sea de tipo datetime
+        df.index = pd.to_datetime(df.index)
 
         return df
 
@@ -202,7 +209,9 @@ class InfluxdbOperation(InfluxdbConnection):
         if not points:
             raise ValueError("La lista de puntos no puede estar vacia.")
 
-        self._client.write_points(points=points, database=db_to_use, batch_size=5000)
+        self._client.write_points(
+            points=points, database=db_to_use, batch_size=5000
+        )
 
     def write_dataframe(
         self,
@@ -271,7 +280,8 @@ class InfluxdbOperation(InfluxdbConnection):
             col
             for col in data.columns
             if not all(
-                isinstance(val, allowed_types) or pd.isna(val) for val in data[col]
+                isinstance(val, allowed_types) or pd.isna(val)
+                for val in data[col]
             )
         ]
 
@@ -290,7 +300,11 @@ class InfluxdbOperation(InfluxdbConnection):
         for index, row in data.iterrows():
             # Filtrar los campos validos: excluir NaN y valores no soportados
             fields = {
-                field: self.normalize_value_to_write(value) if pass_to_float else value
+                field: (
+                    self.normalize_value_to_write(value)
+                    if pass_to_float
+                    else value
+                )
                 for field, value in row.items()
                 if pd.notna(value)
             }

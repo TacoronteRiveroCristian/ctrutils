@@ -1,3 +1,3 @@
-from .InfluxdbOperation import InfluxdbOperation
+from .InfluxdbOperation import InfluxdbOperation, InfluxdbUtils
 
-__all__ = ["InfluxdbOperation"]
+__all__ = ["InfluxdbOperation", "InfluxdbUtils"]
