@@ -8,6 +8,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Union
 
+import pytz
 from dateutil.parser import parse  # type: ignore
 from influxdb import InfluxDBClient
 
@@ -101,7 +102,8 @@ class InfluxdbUtils:
                     query_parts = [f'"{field}"' for field in field_list]
                 else:
                     query_parts = [
-                        f'{operation}("{field}") AS "{field}"' for field in field_list
+                        f'{operation}("{field}") AS "{field}"'
+                        for field in field_list
                     ]
                 query_fields[field_type] = ", ".join(query_parts)
 
@@ -116,13 +118,6 @@ class InfluxdbUtils:
         :type datetime_value: Union[str, datetime]
         :return: La fecha en formato ISO 8601 como string.
         :rtype: str
-
-        **Ejemplo de uso**:
-
-        .. code-block:: python
-
-            iso_date = InfluxdbUtils.convert_to_influxdb_iso("2023-01-01T12:00:00")
-            print(iso_date)  # "2023-01-01T12:00:00Z"
         """
         if isinstance(datetime_value, datetime):
             dt_obj = datetime_value
@@ -133,8 +128,12 @@ class InfluxdbUtils:
                 "El valor proporcionado debe ser una cadena o un objeto datetime."
             )
 
-        dt_obj = dt_obj.replace(microsecond=0)
-        return dt_obj.isoformat() + "Z" if dt_obj.tzinfo is None else dt_obj.isoformat()
+        # Si el datetime no tiene zona horaria, asumir que es UTC
+        if dt_obj.tzinfo is None:
+            dt_obj = dt_obj.replace(tzinfo=pytz.UTC)
+
+        # Retornar en formato ISO 8601
+        return dt_obj.astimezone(pytz.UTC).isoformat()
 
     @staticmethod
     def convert_to_datetime(string_datetime: str) -> datetime:
@@ -155,11 +154,15 @@ class InfluxdbUtils:
         """
         dt_obj = parse(string_datetime)
         if not isinstance(dt_obj, datetime):
-            raise ValueError("El valor no pudo ser convertido a un objeto datetime.")
+            raise ValueError(
+                "El valor no pudo ser convertido a un objeto datetime."
+            )
         return dt_obj
 
     @staticmethod
-    def get_measurements_to_copy(client: InfluxDBClient) -> Dict[str, List[str]]:
+    def get_measurements_to_copy(
+        client: InfluxDBClient,
+    ) -> Dict[str, List[str]]:
         """
         Devuelve un diccionario que contiene las bases de datos del servidor InfluxDB remoto y sus respectivas mediciones.
 

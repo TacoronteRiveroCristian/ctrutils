@@ -4,9 +4,9 @@ alabaster==1.0.0 ; python_version >= "3.10" and python_version < "4.0" \
 appnope==0.1.4 ; python_version >= "3.10" and python_version < "4.0" and platform_system == "Darwin" \
     --hash=sha256:1de3860566df9caf38f01f86f65e0e13e379af54f9e4bee1e66b48f2efffd1ee \
     --hash=sha256:502575ee11cd7a28c0205f379b525beefebab9d161b7c964670864014ed7213c
-astroid==3.3.7 ; python_version >= "3.10" and python_version < "4.0" \
-    --hash=sha256:29fe1df7ef64dc17a54dbfad67b40b445340fcdba7c4012e7ecc9270c9b2f5b6 \
-    --hash=sha256:e1ea2c358a3c760ef583d4963e773100fa2c693b27ed158a1d0e81adb4436903
+astroid==3.3.6 ; python_version >= "3.10" and python_version < "4.0" \
+    --hash=sha256:6aaea045f938c735ead292204afdb977a36e989522b7833ef6fea94de743f442 \
+    --hash=sha256:db676dc4f3ae6bfe31cda227dc60e03438378d7a896aec57422c95634e8d722f
 asttokens==3.0.0 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:0dcd8baa8d62b0c1d118b399b2ddba3c4aff271d0d7a9e0d4c1681c79035bbc7 \
     --hash=sha256:e3078351a059199dd5138cb1c706e6430c05eff2ff136af5eb4790f9d28932e2
