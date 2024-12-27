@@ -112,17 +112,24 @@ class InfluxdbUtils:
     @staticmethod
     def convert_to_influxdb_iso(datetime_value: Union[str, datetime]) -> str:
         """
-        Convierte una fecha en formato `datetime` o `str` al formato ISO 8601.
+        Convierte una fecha en formato `datetime` o `str` al formato ISO 8601 sin microsegundos y con zona horaria UTC.
 
         :param datetime_value: Valor de la fecha a convertir, puede ser una cadena o un objeto `datetime`.
         :type datetime_value: Union[str, datetime]
-        :return: La fecha en formato ISO 8601 como string.
+        :return: La fecha en formato ISO 8601 sin microsegundos como string.
         :rtype: str
+        :raises ValueError: Si no se puede convertir el valor al formato ISO 8601.
         """
         if isinstance(datetime_value, datetime):
             dt_obj = datetime_value
         elif isinstance(datetime_value, str):
-            dt_obj = parse(datetime_value)
+            try:
+                # Intentar interpretar como formato ISO 8601
+                dt_obj = parse(datetime_value)
+            except ValueError as e:
+                raise ValueError(
+                    f"Error al analizar la fecha proporcionada '{datetime_value}': {e}"
+                ) from e
         else:
             raise TypeError(
                 "El valor proporcionado debe ser una cadena o un objeto datetime."
@@ -132,8 +139,8 @@ class InfluxdbUtils:
         if dt_obj.tzinfo is None:
             dt_obj = dt_obj.replace(tzinfo=pytz.UTC)
 
-        # Retornar en formato ISO 8601
-        return dt_obj.astimezone(pytz.UTC).isoformat()
+        # Retornar en formato ISO 8601 sin microsegundos y con zona horaria UTC
+        return dt_obj.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S%z")
 
     @staticmethod
     def convert_to_datetime(string_datetime: str) -> datetime:

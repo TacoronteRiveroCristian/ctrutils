@@ -142,9 +142,6 @@ class InfluxdbOperation(InfluxdbConnection):
         if "time" in df.columns:
             df = df.set_index("time")
 
-        # Asegurarse de que el indice sea de tipo datetime
-        df.index = pd.to_datetime(df.index)
-
         return df
 
     def normalize_value_to_write(self, value: Any) -> Any:
