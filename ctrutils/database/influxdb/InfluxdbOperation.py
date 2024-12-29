@@ -6,10 +6,10 @@ ejecutar consultas, escribir datos en InfluxDB, y formatear valores para escritu
 
 from typing import Any, Optional, Union
 
-import pandas as pd
+import pandas as pd  # type: ignore
 
 from ctrutils.database.influxdb.InfluxdbConnection import InfluxdbConnection
-from ctrutils.database.influxdb.InfluxdbUtils import InfluxdbUtils
+from ctrutils.utils.DateUtils import DateUtils
 
 
 class InfluxdbOperation(InfluxdbConnection):
@@ -71,7 +71,7 @@ class InfluxdbOperation(InfluxdbConnection):
         super().__init__(host=host, port=port, timeout=timeout, **kwargs)
         self._client = self.get_client
         self._database: Optional[str] = None
-        self._influxdb_utils = InfluxdbUtils()
+        self._date_utils = DateUtils()
 
     def switch_database(self, database: str) -> None:
         """
@@ -263,8 +263,8 @@ class InfluxdbOperation(InfluxdbConnection):
             # Eliminar registros conflictivos
             for point in points:
                 measurement = point.get("measurement")
-                time = self._influxdb_utils.convert_to_influxdb_iso(
-                    point.get("time"), "influxdb"
+                time = self._date_utils.convert_datetime(
+                    datetime_value=point.get("time"), output_format="iso8601"
                 )
                 point_tags = point.get("tags", {})
 
@@ -402,8 +402,8 @@ class InfluxdbOperation(InfluxdbConnection):
             if fields:
                 point = {
                     "measurement": measurement,
-                    "time": self._influxdb_utils.convert_to_influxdb_iso(
-                        index, "influxdb"
+                    "time": self._date_utils.convert_datetime(
+                        datetime_value=index, output_format="iso8601"
                     ),
                     "fields": fields,
                 }

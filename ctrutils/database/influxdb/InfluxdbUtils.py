@@ -5,11 +5,8 @@ convertir fechas y escribir datos en InfluxDB.
 """
 
 from collections import defaultdict
-from datetime import datetime
-from typing import Dict, List, Literal, Union
+from typing import Dict, List, Union
 
-import pytz  # type: ignore
-from dateutil.parser import parse  # type: ignore
 from influxdb import InfluxDBClient  # type: ignore
 
 
@@ -108,80 +105,6 @@ class InfluxdbUtils:
                 query_fields[field_type] = ", ".join(query_parts)
 
         return dict(query_fields)
-
-    @staticmethod
-    def convert_to_influxdb_iso(
-        datetime_value: Union[str, datetime],
-        output_format: Literal["default", "influxdb", "iso"] = "default",
-    ) -> str:
-        """
-        Convierte una fecha en formato `datetime` o `str` a varios formatos, incluyendo el específico para InfluxDB.
-
-        :param datetime_value: Valor de la fecha a convertir, puede ser una cadena o un objeto `datetime`.
-        :type datetime_value: Union[str, datetime]
-        :param output_format: Formato de salida deseado. Opciones disponibles:
-            - "default": ISO 8601 sin microsegundos y con zona horaria UTC (actual).
-            - "influxdb": Formato ISO 8601 compatible con InfluxDB (sin microsegundos y con sufijo 'Z').
-            - "iso": Formato ISO 8601 completo con microsegundos.
-        :type output_format: str
-        :return: La fecha en el formato solicitado como string.
-        :rtype: str
-        :raises ValueError: Si no se puede convertir el valor al formato solicitado.
-        """
-        if isinstance(datetime_value, datetime):
-            dt_obj = datetime_value
-        elif isinstance(datetime_value, str):
-            try:
-                # Intentar interpretar como formato ISO 8601
-                dt_obj = parse(datetime_value)
-            except ValueError as e:
-                raise ValueError(
-                    f"Error al analizar la fecha proporcionada '{datetime_value}': {e}"
-                ) from e
-        else:
-            raise TypeError(
-                "El valor proporcionado debe ser una cadena o un objeto datetime."
-            )
-
-        # Si el datetime no tiene zona horaria, asumir que es UTC
-        if dt_obj.tzinfo is None:
-            dt_obj = dt_obj.replace(tzinfo=pytz.UTC)
-
-        # Devolver el formato solicitado
-        if output_format == "default":
-            return dt_obj.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S%z")
-        elif output_format == "influxdb":
-            return dt_obj.astimezone(pytz.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        elif output_format == "iso":
-            return dt_obj.astimezone(pytz.UTC).isoformat()
-        else:
-            raise ValueError(
-                f"Formato de salida no soportado: '{output_format}'. Opciones disponibles: 'default', 'influxdb', 'iso'."
-            )
-
-    @staticmethod
-    def convert_to_datetime(string_datetime: str) -> datetime:
-        """
-        Convierte una cadena que representa una fecha y hora en un objeto datetime.
-
-        :param string_datetime: La cadena que representa la fecha y hora a convertir.
-        :type string_datetime: str
-        :return: Un objeto datetime con la fecha y hora correspondiente.
-        :rtype: datetime
-
-        **Ejemplo de uso**:
-
-        .. code-block:: python
-
-            date_obj = InfluxdbUtils.convert_to_datetime("2023-01-01T12:00:00")
-            print(date_obj)  # datetime.datetime(2023, 1, 1, 12, 0)
-        """
-        dt_obj = parse(string_datetime)
-        if not isinstance(dt_obj, datetime):
-            raise ValueError(
-                "El valor no pudo ser convertido a un objeto datetime."
-            )
-        return dt_obj
 
     @staticmethod
     def get_measurements_to_copy(
