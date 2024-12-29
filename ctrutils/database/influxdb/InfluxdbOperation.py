@@ -172,29 +172,77 @@ class InfluxdbOperation(InfluxdbConnection):
         self,
         points: list,
         database: Optional[str] = None,
+        tags: Optional[dict] = None,
+        clean_previous: bool = False,
     ) -> None:
         """
-        Escribe una lista de puntos directamente en InfluxDB.
+        Escribe una lista de puntos directamente en InfluxDB, con soporte para la actualizacion de registros mediante tags.
 
-        :param points: Lista de puntos a escribir en InfluxDB.
+        Este metodo permite escribir una lista de puntos en InfluxDB. Si se proporciona el parametro `tags`, estos se
+        aplicaran como tags adicionales o sobrescribirán los existentes en cada punto. Adicionalmente, si se establece
+        el parametro `clean_previous` como `True`, se eliminaran los registros existentes con tags que no coincidan con los
+        proporcionados antes de escribir los nuevos puntos.
+
+        :param points: Lista de puntos a escribir en InfluxDB. Cada punto debe incluir al menos las claves
+            `measurement`, `time`, y `fields`. Los tags son opcionales, pero pueden incluirse para clasificar los puntos.
         :type points: list
-        :param database: El nombre de la base de datos en la que se escribiran los datos.
+        :param database: El nombre de la base de datos en la que se escribiran los puntos. Si no se especifica,
+            se utilizara la base de datos activa.
         :type database: Optional[str]
-        :raises ValueError: Si no se proporciona una lista de puntos.
+        :param tags: Diccionario de tags adicionales a agregar o sobrescribir en los puntos proporcionados.
+        :type tags: Optional[dict]
+        :param clean_previous: Si es True, elimina registros conflictivos antes de escribir los nuevos puntos.
+            Los registros conflictivos son aquellos con el mismo `time` pero cuyos tags no coinciden con los
+            proporcionados en los nuevos puntos. Por defecto es False.
+        :type clean_previous: bool
+        :raises ValueError:
+            - Si no se proporciona una lista de puntos valida.
+            - Si no se especifica una base de datos valida.
 
-        **Ejemplo de uso**:
+        **Ejemplo de uso basico**:
 
         .. code-block:: python
 
-            influxdb_op = InfluxdbOperation(host="localhost", port=8086)
-            influxdb_op.switch_database("mi_base_de_datos")
-
             points = [
-                {"measurement": "my_measurement", "fields": {"value": 10}, "time": "2023-01-01T00:00:00Z"},
-                {"measurement": "my_measurement", "fields": {"value": 20}, "time": "2023-01-02T00:00:00Z"}
+                {"measurement": "test_tags", "time": "2023-01-01T00:00:00", "fields": {"value": 10}},
+                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}}
             ]
 
-            influxdb_op.write_points(points=points)
+            influxdb_op.write_points(points=points, database="test_db")
+
+        **Ejemplo con tags adicionales**:
+
+        .. code-block:: python
+
+            points = [
+                {"measurement": "test_tags", "time": "2023-01-01T00:00:00", "fields": {"value": 10}, "tags": {"sensor": "A"}},
+                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}, "tags": {"sensor": "B"}}
+            ]
+
+            influxdb_op.write_points(points=points, database="test_db", tags={"location": "site_1"})
+
+            # Esto agregara el tag "location: site_1" a ambos puntos.
+
+        **Ejemplo de actualizacion de registros con tags**:
+
+        .. code-block:: python
+
+            points = [
+                {"measurement": "test_tags", "time": "2023-01-01T00:00:00", "fields": {"value": 10}, "tags": {"sensor": "A"}},
+                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}, "tags": {"sensor": "B"}}
+            ]
+
+            # Escribir puntos iniciales
+            influxdb_op.write_points(points=points, database="test_db")
+
+            # Actualizar el tag "sensor" para el segundo punto
+            updated_points = [
+                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}, "tags": {"sensor": "C"}}
+            ]
+
+            influxdb_op.write_points(points=updated_points, database="test_db", clean_previous=True)
+
+            # Esto eliminara el registro original con "sensor: B" y escribira el nuevo con "sensor: C".
         """
         db_to_use = database or self._database
         if db_to_use is None:
@@ -206,6 +254,38 @@ class InfluxdbOperation(InfluxdbConnection):
         if not points:
             raise ValueError("La lista de puntos no puede estar vacia.")
 
+        # Agregar tags adicionales a los puntos
+        if tags:
+            for point in points:
+                point["tags"] = {**point.get("tags", {}), **tags}
+
+        if clean_previous:
+            # Eliminar registros conflictivos
+            for point in points:
+                measurement = point.get("measurement")
+                time = self._influxdb_utils.convert_to_influxdb_iso(
+                    point.get("time"), "influxdb"
+                )
+                point_tags = point.get("tags", {})
+
+                if not measurement or not time:
+                    raise ValueError(
+                        "Todos los puntos deben especificar 'measurement' y 'time'."
+                    )
+
+                # Construir consulta para eliminar solo registros conflictivos
+                tag_filter = " OR ".join(
+                    [f"{key}!='{value}'" for key, value in point_tags.items()]
+                )
+                delete_query = (
+                    f"DELETE FROM {measurement} WHERE time = '{time}'"
+                )
+                if tag_filter:
+                    delete_query += f" AND {tag_filter}"
+
+                self._client.query(delete_query, database=db_to_use)
+
+        # Escribir los puntos
         self._client.write_points(
             points=points, database=db_to_use, batch_size=5000
         )
@@ -219,17 +299,24 @@ class InfluxdbOperation(InfluxdbConnection):
         pass_to_float: bool = True,
         convert_bool_to_float: bool = False,
         suffix_bool_to_float: str = "_bool_to_float",
-    ) -> list:
+        clean_previous_tags: bool = False,
+    ) -> None:
         """
-        Convierte un DataFrame en una lista de puntos en el formato adecuado para escribir en InfluxDB.
+        Convierte un DataFrame en una lista de puntos y los escribe en InfluxDB, con soporte para la gestion de tags.
+
+        Este metodo toma un DataFrame de pandas y lo convierte en una lista de puntos para escribir en InfluxDB.
+        Los valores NaN en el DataFrame seran excluidos de los puntos generados. Si se especifica el parametro `tags`,
+        estos se agregaran como tags adicionales a cada punto. Adicionalmente, si se establece `clean_previous_tags` como
+        `True`, se eliminaran los registros existentes que no coincidan con los nuevos tags antes de escribir los puntos.
 
         :param measurement: Nombre de la medida en InfluxDB.
         :type measurement: str
-        :param data: DataFrame de pandas con los datos a convertir.
+        :param data: DataFrame de pandas con los datos a convertir. El indice debe ser de tipo datetime.
         :type data: pd.DataFrame
-        :param tags: Diccionario de tags a asociar a los puntos.
+        :param tags: Diccionario de tags a asociar a los puntos generados.
         :type tags: Optional[dict]
-        :param database: El nombre de la base de datos en la que se escribirán los datos.
+        :param database: El nombre de la base de datos en la que se escribiran los puntos. Si no se especifica,
+            se utilizara la base de datos activa.
         :type database: Optional[str]
         :param pass_to_float: Si es True, convierte valores int y bool a float antes de escribirlos en InfluxDB. Por defecto es True.
         :type pass_to_float: bool
@@ -237,53 +324,72 @@ class InfluxdbOperation(InfluxdbConnection):
         :type convert_bool_to_float: bool
         :param suffix_bool_to_float: Sufijo de las nuevas columnas de tipo float provenientes de columnas de tipo bool.
         :type suffix_bool_to_float: str
-        :return: Lista de puntos formateados para InfluxDB.
-        :rtype: list
+        :param clean_previous_tags: Si es True, elimina los puntos existentes que no coincidan con los nuevos tags antes
+            de escribir los puntos generados. Por defecto es False.
+        :type clean_previous_tags: bool
         :raises ValueError:
-            - Si no se proporciona un DataFrame o el nombre de la medida.
-            - ValueError: Si el índice del DataFrame no es convertible a un índice de tipo datetime.
+            - Si no se proporciona un DataFrame o un nombre de medida valido.
+            - Si el indice del DataFrame no es convertible a un indice de tipo datetime.
 
-        **Notas**:
-            - El índice del DataFrame debe ser de tipo datetime para garantizar la compatibilidad con InfluxDB.
-            - Los valores NaN serán excluidos al convertir los datos a puntos.
-
-        **Ejemplo de uso**:
+        **Ejemplo de uso basico**:
 
         .. code-block:: python
 
             import pandas as pd
-            from influxdb_client import InfluxdbOperation
-
-            influxdb_op = InfluxdbOperation(host="localhost", port=8086)
 
             data = pd.DataFrame({
-                "value": [10, 20, None, 40, 50],
-                "other_field": [True, False, None, True, False]
-            }, index=pd.date_range(start="2023-01-01", periods=5, freq="D"))
+                "value": [10, 20, None, 40],
+                "sensor": ["A", "B", "C", "D"]
+            }, index=pd.date_range(start="2023-01-01", periods=4, freq="H"))
 
-            points = influxdb_op.write_dataframe(
-                measurement="my_measurement",
+            influxdb_op.write_dataframe(
+                measurement="test_tags",
                 data=data,
-                tags={"location": "test_site"}
+                database="test_db"
             )
-            print(points)
-        """
 
-        # Comprobar que se proporcionaron los argumentos necesarios
+        **Ejemplo con tags adicionales**:
+
+        .. code-block:: python
+
+            influxdb_op.write_dataframe(
+                measurement="test_tags",
+                data=data,
+                tags={"location": "site_1"},
+                database="test_db"
+            )
+
+            # Esto agregara el tag "location: site_1" a todos los puntos generados.
+
+        **Ejemplo de actualizacion de registros con tags**:
+
+        .. code-block:: python
+
+            influxdb_op.write_dataframe(
+                measurement="test_tags",
+                data=data,
+                tags={"location": "updated_site"},
+                database="test_db",
+                clean_previous_tags=True
+            )
+
+            # Esto eliminara los registros que no coincidan con los nuevos tags y actualizara los puntos existentes.
+        """
         if data is None or measurement is None:
             raise ValueError(
                 "Debe proporcionar un DataFrame 'data' y un 'measurement'."
             )
 
-        # Seleccionar las columnas booleanas y pasarlas a float si es necesario
+        # Seleccionar las columnas booleanas y convertirlas a float si es necesario
         if convert_bool_to_float:
-            for c in data.select_dtypes(include=["bool"]).columns:
-                data[f"{c}{suffix_bool_to_float}"] = data[c].astype(float)
+            for column in data.select_dtypes(include=["bool"]).columns:
+                data[f"{column}{suffix_bool_to_float}"] = data[column].astype(
+                    float
+                )
 
-        # Crear lista de puntos a partir del dataframe
+        # Crear lista de puntos a partir del DataFrame
         points = []
         for index, row in data.iterrows():
-            # Filtrar los campos validos: excluir NaN y valores no soportados
             fields = {
                 field: (
                     self.normalize_value_to_write(value)
@@ -293,17 +399,20 @@ class InfluxdbOperation(InfluxdbConnection):
                 for field, value in row.items()
                 if pd.notna(value)
             }
-
-            # Solo agregar el punto si tiene campos validos
             if fields:
                 point = {
-                    "time": self._influxdb_utils.convert_to_influxdb_iso(index),
-                    "fields": fields,
                     "measurement": measurement,
+                    "time": self._influxdb_utils.convert_to_influxdb_iso(
+                        index, "influxdb"
+                    ),
+                    "fields": fields,
                 }
-                if tags:
-                    point["tags"] = tags
                 points.append(point)
 
-        # Registar lista de puntos
-        self.write_points(points=points, database=database)
+        # Delegar la escritura a write_points
+        self.write_points(
+            points=points,
+            database=database,
+            tags=tags,
+            clean_previous=clean_previous_tags,
+        )
