@@ -120,7 +120,7 @@ class DateUtils:
             dt_obj = dt_obj.replace(tzinfo=tzinfo)
 
         if output_format == "iso8601":
-            return dt_obj.isoformat().replace("+00:00", "Z")
+            return dt_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
         elif output_format == "iso8601_full":
             return dt_obj.isoformat()
         elif output_format == "date_only":
