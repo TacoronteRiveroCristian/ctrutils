@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ctrutils"
-version = "7.0.1"
+version = "8.0.0"
 description = "Libreria de utilidades varias"
 authors = ["CristianTacoronteRivero <tacoronteriverocristian@gmail.com>"]
 license = "MIT"
