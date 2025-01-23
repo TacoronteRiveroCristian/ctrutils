@@ -1,5 +1,5 @@
-ctrutils package
-================
+ctrutils.handler package
+========================
 
 Subpackages
 -----------
@@ -7,15 +7,13 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   ctrutils.database
-   ctrutils.handler
-   ctrutils.template
-   ctrutils.utils
+   ctrutils.handler.diagnostic
+   ctrutils.handler.logging
 
 Module contents
 ---------------
 
-.. automodule:: ctrutils
+.. automodule:: ctrutils.handler
    :members:
    :undoc-members:
    :show-inheritance:

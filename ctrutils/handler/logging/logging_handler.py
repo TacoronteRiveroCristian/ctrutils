@@ -8,6 +8,8 @@ from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from typing import List, Optional
 
+from .telegram_handler import ParseMode, TelegramBotHandler
+
 
 class LoggingHandler:
     """
@@ -138,6 +140,31 @@ class LoggingHandler:
         handler.setFormatter(logging.Formatter(self._message_format))
         return handler
 
+    def create_telegram_handler(
+        self,
+        token: str,
+        chat_id: str,
+        level: int = logging.ERROR,
+        parse_mode: ParseMode = "HTML",
+    ) -> TelegramBotHandler:
+        """
+        Crea un handler para enviar logs a Telegram.
+
+        :param token: Token de autenticacion del bot de Telegram.
+        :type token: str
+        :param chat_id: ID del chat o canal de Telegram donde se enviaran los mensajes.
+        :type chat_id: str
+        :param level: Nivel minimo de log para enviar mensajes, defaults to logging.ERROR
+        :type level: int, optional
+        :param parse_mode: Modo de parse para el formato del mensaje, defaults to "HTML"
+        :type parse_mode: ParseMode, optional
+        :return: TelegramBotHandler configurado.
+        :rtype: TelegramBotHandler
+        """
+        handler = TelegramBotHandler(token, chat_id, level, parse_mode)
+        handler.setFormatter(logging.Formatter(self._message_format))
+        return handler
+
     def add_handlers(
         self, handlers: List[logging.Handler], name: Optional[str] = None
     ) -> logging.Logger:
@@ -176,9 +203,7 @@ class LoggingHandler:
         :raises ValueError: Si no se ha configurado ningún logger previamente.
         """
         if not self.logger:
-            raise ValueError(
-                "No se ha configurado ningún logger para esta instancia."
-            )
+            raise ValueError("No se ha configurado ningún logger para esta instancia.")
 
         if remove_all:
             for handler in self.logger.handlers[:]:

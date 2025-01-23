@@ -16,8 +16,8 @@ from typing import Dict, List, Optional, Union
 
 from ctrutils.database.influxdb.InfluxdbOperation import InfluxdbOperation
 from ctrutils.database.influxdb.InfluxdbUtils import InfluxdbUtils
-from ctrutils.handlers.ErrorHandlerBase import ErrorHandler
-from ctrutils.handlers.LoggingHandlerBase import LoggingHandler
+from ctrutils.handler.diagnostic.error_handler import ErrorHandler
+from ctrutils.handler.logging.logging_handler import LoggingHandler
 
 # Ruta del fichero de logs
 LOG_FILE = "/path/to/backup_to_delphos.log"
