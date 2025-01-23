@@ -4,18 +4,18 @@ ctrutils.utils package
 Submodules
 ----------
 
-ctrutils.utils.DateUtils module
--------------------------------
+ctrutils.utils.date\_utils module
+---------------------------------
 
-.. automodule:: ctrutils.utils.DateUtils
+.. automodule:: ctrutils.utils.date_utils
    :members:
    :undoc-members:
    :show-inheritance:
 
-ctrutils.utils.TextUtils module
--------------------------------
+ctrutils.utils.text\_utils module
+---------------------------------
 
-.. automodule:: ctrutils.utils.TextUtils
+.. automodule:: ctrutils.utils.text_utils
    :members:
    :undoc-members:
    :show-inheritance:

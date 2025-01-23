@@ -29,8 +29,8 @@ class TextUtils:
         print(normalized_text)  # Devuelve 'Hola_como_estas_Nono'
     """
 
-    @staticmethod
-    def normalize_text(text: str) -> str:
+    @classmethod
+    def normalize_text(cls, text: str) -> str:
         """
         Normaliza un texto eliminando caracteres especiales, reemplazando espacios por '_',
         y transformando caracteres con acentos o especiales a su equivalente ASCII.

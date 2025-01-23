@@ -32,8 +32,9 @@ class DateUtils:
         print(relative_date)  # Devuelve la fecha dentro de 7 días en formato ISO 8601
     """
 
+    @classmethod
     def convert_datetime(
-        self,
+        cls,
         datetime_value: Union[str, datetime],
         output_format: Literal[
             "iso8601",
@@ -148,8 +149,9 @@ class DateUtils:
                 "'timestamp_nanoseconds', 'eu_format', o 'custom'."
             )
 
+    @classmethod
     def get_relative_date(
-        self,
+        cls,
         months: Optional[int] = 0,
         weeks: Optional[int] = 0,
         days: Optional[int] = 0,
@@ -241,12 +243,13 @@ class DateUtils:
         )
 
         # Convertir al formato deseado
-        return self.convert_datetime(
+        return cls.convert_datetime(
             relative_datetime, output_format, custom_format, tzinfo
         )
 
+    @classmethod
     def get_start_of_day(
-        self,
+        cls,
         date: datetime,
         output_format: Literal["iso8601", "datetime", "custom"] = "iso8601",
         custom_format: Optional[str] = None,
@@ -264,10 +267,11 @@ class DateUtils:
         :rtype: Union[str, datetime]
         """
         start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
-        return self.convert_datetime(start_of_day, output_format, custom_format)
+        return cls.convert_datetime(start_of_day, output_format, custom_format)
 
+    @classmethod
     def get_end_of_day(
-        self,
+        cls,
         date: datetime,
         output_format: Literal["iso8601", "datetime", "custom"] = "iso8601",
         custom_format: Optional[str] = None,
@@ -285,4 +289,4 @@ class DateUtils:
         :rtype: Union[str, datetime]
         """
         end_of_day = date.replace(hour=23, minute=59, second=59, microsecond=0)
-        return self.convert_datetime(end_of_day, output_format, custom_format)
+        return cls.convert_datetime(end_of_day, output_format, custom_format)

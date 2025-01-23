@@ -9,7 +9,7 @@ from typing import Any, Optional, Union
 import pandas as pd  # type: ignore
 
 from ctrutils.database.influxdb.InfluxdbConnection import InfluxdbConnection
-from ctrutils.utils.DateUtils import DateUtils
+from ctrutils.utils.date_utils import DateUtils
 
 
 class InfluxdbOperation(InfluxdbConnection):
@@ -71,7 +71,6 @@ class InfluxdbOperation(InfluxdbConnection):
         super().__init__(host=host, port=port, timeout=timeout, **kwargs)
         self._client = self.get_client
         self._database: Optional[str] = None
-        self._date_utils = DateUtils()
 
     def switch_database(self, database: str) -> None:
         """
@@ -263,7 +262,7 @@ class InfluxdbOperation(InfluxdbConnection):
             # Eliminar registros conflictivos
             for point in points:
                 measurement = point.get("measurement")
-                time = self._date_utils.convert_datetime(
+                time = DateUtils.convert_datetime(
                     datetime_value=point.get("time"), output_format="iso8601"
                 )
                 point_tags = point.get("tags", {})
@@ -402,7 +401,7 @@ class InfluxdbOperation(InfluxdbConnection):
             if fields:
                 point = {
                     "measurement": measurement,
-                    "time": self._date_utils.convert_datetime(
+                    "time": DateUtils.convert_datetime(
                         datetime_value=index, output_format="iso8601"
                     ),
                     "fields": fields,
