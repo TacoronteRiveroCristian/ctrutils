@@ -40,6 +40,7 @@ class LoggingHandler:
         self,
         level: int = logging.INFO,
         message_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        logger_name: Optional[str] = None,
     ):
         """
         Inicializa una instancia de LoggingHandler con configuraciones predeterminadas.
@@ -51,7 +52,13 @@ class LoggingHandler:
         """
         self._level = level
         self._message_format = message_format
-        self.logger: Optional[logging.Logger] = None
+
+        # Si no se proporciona un nombre, generamos uno unico para cada instancia
+        self._logger_name = logger_name or f"{self.__class__.__name__}_{id(self)}"
+        self.logger: Optional[logging.Logger] = logging.getLogger(self._logger_name)
+        self.logger.setLevel(self._level)
+        # Evitar que los registros se propaguen al logger raiz
+        self.logger.propagate = False
 
     def _create_log_directory(self, log_file: Path) -> None:
         """
@@ -165,21 +172,16 @@ class LoggingHandler:
         handler.setFormatter(logging.Formatter(self._message_format))
         return handler
 
-    def add_handlers(
-        self, handlers: List[logging.Handler], name: Optional[str] = None
-    ) -> logging.Logger:
+    def add_handlers(self, handlers: List[logging.Handler]) -> logging.Logger:
         """
         Agrega los handlers proporcionados a un logger y lo devuelve.
 
         :param handlers: Lista de handlers a asociar al logger.
         :type handlers: List[logging.Handler]
-        :param name: Nombre opcional para el logger. Si no se especifica, se utiliza 'LoggingHandler'.
-        :type name: str, opcional
         :return: Logger configurado con los handlers proporcionados.
         :rtype: logging.Logger
         """
-        logger_name = name or "LoggingHandler"
-        self.logger = logging.getLogger(logger_name)
+        self.logger = logging.getLogger(self._logger_name)
         self.logger.setLevel(self._level)
 
         for handler in handlers:
