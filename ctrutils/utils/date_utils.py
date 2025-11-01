@@ -49,57 +49,27 @@ class DateUtils:
         ] = "iso8601",
         custom_format: Optional[str] = None,
         tzinfo: Optional[str] = None,
-    ) -> Union[datetime, str]:
+        to_utc: bool = False,
+    ) -> Union[datetime, str, int]:
         """
-        Convierte un valor de fecha/hora en diferentes formatos especificados o personalizados.
+        Convierte un valor de fecha/hora en diferentes formatos, con manejo de zonas horarias.
 
         :param datetime_value: Valor de la fecha/hora a convertir. Puede ser un `datetime` o una cadena.
         :type datetime_value: Union[str, datetime]
-        :param output_format: Formato de salida deseado. Puede ser:
-            - "iso8601": Formato ISO 8601 estándar (por defecto).
-            - "iso8601_full": Formato ISO 8601 con microsegundos.
-            - "date_only": Solo la fecha (YYYY-MM-DD).
-            - "datetime": Retorna un objeto `datetime`.
-            - "timestamp_seconds": Marca de tiempo en segundos desde el epoch.
-            - "timestamp_milliseconds": Marca de tiempo en milisegundos desde el epoch.
-            - "timestamp_nanoseconds": Marca de tiempo en nanosegundos desde el epoch.
-            - "eu_format": Formato europeo (DD/MM/YYYY HH:MM:SS).
-            - "custom": Usa un formato personalizado especificado en `custom_format`.
+        :param output_format: Formato de salida deseado.
         :type output_format: Literal["iso8601", "iso8601_full", "date_only", "datetime",
                                     "timestamp_seconds", "timestamp_milliseconds",
                                     "timestamp_nanoseconds", "eu_format", "custom"]
-        :param custom_format: Formato personalizado para salida si `output_format` es "custom".
-                            Ejemplo: "%Y-%m-%d %H:%M:%S".
+        :param custom_format: Formato personalizado si `output_format` es "custom".
         :type custom_format: Optional[str]
-        :param tzinfo: Información de zona horaria para ajustar la fecha/hora resultante.
-                    Si es `None`, no se aplica ninguna zona horaria.
+        :param tzinfo: Zona horaria de origen si la fecha de entrada es ingenua (naive).
         :type tzinfo: Optional[str]
+        :param to_utc: Si es True, convierte la fecha/hora a UTC antes de formatear.
+        :type to_utc: bool
         :return: Fecha/hora en el formato especificado.
-        :rtype: Union[datetime, str]
+        :rtype: Union[datetime, str, int]
         :raises ValueError: Si `datetime_value` no puede ser interpretado o `output_format` es inválido.
         :raises TypeError: Si se especifica un formato personalizado sin establecer `output_format` en "custom".
-
-        **Ejemplo de uso**:
-
-        .. code-block:: python
-
-            from your_module import DateUtils
-
-            date_utils = DateUtils()
-
-            # Convertir a ISO 8601
-            iso_date = date_utils.convert_datetime("2023-01-01T12:00:00", "iso8601")
-            print(iso_date)  # "2023-01-01T12:00:00Z"
-
-            # Convertir a timestamp en milisegundos
-            timestamp_ms = date_utils.convert_datetime("2023-01-01T12:00:00", "timestamp_milliseconds")
-            print(timestamp_ms)  # Ejemplo: 1672531200000
-
-            # Convertir con un formato personalizado
-            custom_date = date_utils.convert_datetime(
-                "2023-01-01T12:00:00", "custom", "%d-%m-%Y %H:%M:%S"
-            )
-            print(custom_date)  # "01-01-2023 12:00:00"
         """
         if isinstance(datetime_value, datetime):
             dt_obj = datetime_value
@@ -115,12 +85,24 @@ class DateUtils:
                 "El valor proporcionado debe ser un objeto `datetime` o una cadena."
             )
 
-        if tzinfo:
-            if isinstance(tzinfo, str):
-                tzinfo = pytz.timezone(tzinfo)
-            dt_obj = dt_obj.replace(tzinfo=tzinfo)
+        # Si el datetime es naive (sin tzinfo) y se proporciona un tzinfo, lo localizamos.
+        if dt_obj.tzinfo is None and tzinfo:
+            source_tz = pytz.timezone(tzinfo)
+            dt_obj = source_tz.localize(dt_obj)
+
+        # Si se solicita, convertir a UTC. Si ya es UTC, no hace nada.
+        if to_utc:
+            if dt_obj.tzinfo is None:
+                # Asumimos que el tiempo naive es UTC si se pide convertir a UTC pero no tiene tz.
+                dt_obj = pytz.utc.localize(dt_obj)
+            else:
+                dt_obj = dt_obj.astimezone(pytz.utc)
 
         if output_format == "iso8601":
+            if dt_obj.tzinfo is None or dt_obj.utcoffset() is None:
+                # Si sigue siendo naive, no podemos asegurar que sea UTC.
+                # Lanzar error o asumir UTC es una opción. Asumiremos UTC y formatearemos.
+                dt_obj = pytz.utc.localize(dt_obj)
             return dt_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
         elif output_format == "iso8601_full":
             return dt_obj.isoformat()

@@ -1,91 +1,142 @@
 """
 Este modulo proporciona la clase `InfluxdbOperation` para manejar operaciones en una base de datos
-InfluxDB utilizando un cliente `InfluxDBClient`. La clase incluye metodos para cambiar de base de datos,
-ejecutar consultas, escribir datos en InfluxDB, y formatear valores para escritura.
+InfluxDB utilizando un cliente `InfluxDBClient`.
 """
 
-from typing import Any, Optional, Union
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Union
+import math
 
 import pandas as pd  # type: ignore
+import numpy as np  # type: ignore
+from influxdb import InfluxDBClient
 
-from ctrutils.database.influxdb.InfluxdbConnection import InfluxdbConnection
 from ctrutils.utils.date_utils import DateUtils
 
 
-class InfluxdbOperation(InfluxdbConnection):
+class InfluxdbOperation:
     """
-    Clase para manejar operaciones en la base de datos InfluxDB con un cliente `InfluxDBClient`.
+    Clase para manejar la conexion y operaciones en una base de datos InfluxDB.
 
-    Esta clase hereda de `InfluxdbConnection` y proporciona metodos adicionales para realizar
-    consultas, escribir puntos en la base de datos, y cambiar la base de datos de trabajo.
+    Esta clase proporciona una interfaz completa para interactuar con InfluxDB,
+    incluyendo validacion avanzada de datos, limpieza de NaN, escritura por lotes
+    de DataFrames grandes, y operaciones de administracion de base de datos.
 
-    **Ejemplo de uso**:
+    Ejemplos:
+        >>> # Crear instancia con credenciales
+        >>> influx = InfluxdbOperation(
+        ...     host='localhost',
+        ...     port=8086,
+        ...     username='admin',
+        ...     password='password'
+        ... )
 
-    .. code-block:: python
+        >>> # O usar un cliente existente
+        >>> client = InfluxDBClient(host='localhost', port=8086)
+        >>> influx = InfluxdbOperation(client=client)
 
-        from ctrutils.database.influxdb import InfluxdbOperation
-
-        # Crear una conexion y realizar operaciones en InfluxDB
-        influxdb_op = InfluxdbOperation(host="localhost", port=8086, timeout=10)
-
-        # Cambiar la base de datos activa
-        influxdb_op.switch_database("mi_base_de_datos")
-
-        # Ejecutar una consulta y obtener resultados en DataFrame
-        query = "SELECT * FROM my_measurement LIMIT 10"
-        data = influxdb_op.get_data(query=query)
-        print(data)
-
-        # Escribir datos en InfluxDB
-        influxdb_op.write_points(measurement="my_measurement", data=data)
-
-    :param host: La direccion del host de InfluxDB.
-    :type host: str
-    :param port: El puerto de conexion a InfluxDB.
-    :type port: Union[int, str]
-    :param timeout: El tiempo de espera para la conexion en segundos. Por defecto es 5 segundos.
-    :type timeout: Optional[Union[int, float]]
-    :param kwargs: Parametros adicionales para la conexion a InfluxDB.
-    :type kwargs: Any
+        >>> # Escribir un DataFrame grande con validacion
+        >>> df = pd.DataFrame(...)
+        >>> influx.write_dataframe(
+        ...     measurement='mi_medicion',
+        ...     data=df,
+        ...     database='mi_db',
+        ...     batch_size=1000,
+        ...     validate_data=True
+        ... )
     """
 
     def __init__(
         self,
-        host: str,
-        port: Union[int, str],
+        host: Optional[str] = None,
+        port: Optional[Union[int, str]] = None,
         timeout: Optional[Union[int, float]] = 5,
+        client: Optional[InfluxDBClient] = None,
         **kwargs: Any,
     ):
         """
-        Inicializa la clase `InfluxdbOperation` y establece una conexion con InfluxDB.
+        Inicializa la conexion y la clase `InfluxdbOperation`.
 
-        :param host: La direccion del host de InfluxDB.
-        :type host: str
-        :param port: El puerto de conexion a InfluxDB.
-        :type port: Union[int, str]
-        :param timeout: El tiempo de espera para la conexion en segundos. Por defecto es 5 segundos.
-        :type timeout: Optional[Union[int, float]]
-        :param kwargs: Parametros adicionales para la conexion a InfluxDB.
-        :type kwargs: Any
+        Args:
+            host: Direccion del servidor InfluxDB (requerido si client no se proporciona).
+            port: Puerto del servidor InfluxDB (requerido si client no se proporciona).
+            timeout: Tiempo de espera para las operaciones en segundos.
+            client: Cliente InfluxDBClient existente (opcional). Si se proporciona,
+                   se usara este cliente en lugar de crear uno nuevo.
+            **kwargs: Argumentos adicionales para InfluxDBClient (username, password, etc.).
+
+        Raises:
+            ValueError: Si no se proporciona ni cliente ni host/port.
         """
-        super().__init__(host=host, port=port, timeout=timeout, **kwargs)
-        self._client = self.get_client
+        if client is not None:
+            # Usar el cliente proporcionado
+            self._client = client
+            self._is_external_client = True
+            # Intentar extraer informacion del cliente
+            self.host = getattr(client, '_host', None)
+            self.port = getattr(client, '_port', None)
+            self.timeout = getattr(client, '_timeout', timeout)
+        elif host is not None and port is not None:
+            # Crear un nuevo cliente
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+            self._is_external_client = False
+            self._headers = {"Accept": "application/json"}
+            self._gzip = True
+
+            self._client = InfluxDBClient(
+                host=host,
+                port=port,
+                timeout=timeout,
+                headers=self._headers,
+                gzip=self._gzip,
+                **kwargs,
+            )
+        else:
+            raise ValueError(
+                "Debe proporcionar un cliente existente (client) o "
+                "las credenciales de conexion (host y port)."
+            )
+
         self._database: Optional[str] = None
+        self._headers = {"Accept": "application/json"}
+        self._gzip = True
+
+    @property
+    def get_client_info(self) -> Dict[str, Any]:
+        """
+        Obtiene informacion del cliente actual.
+        """
+        return {
+            "host": self.host,
+            "port": self.port,
+            "database": self._database,
+            "timeout": self.timeout,
+            "headers": self._headers,
+            "gzip": self._gzip,
+        }
+
+    @property
+    def get_client(self) -> InfluxDBClient:
+        """
+        Obtiene el cliente actual `InfluxDBClient`.
+        """
+        return self._client
+
+    def close_client(self) -> None:
+        """
+        Cierra la conexion actual del cliente `InfluxDBClient`.
+
+        Nota: Si el cliente fue proporcionado externamente, no se cerrara automaticamente
+        para evitar efectos secundarios en otros componentes que lo usen.
+        """
+        if not self._is_external_client:
+            self._client.close()
 
     def switch_database(self, database: str) -> None:
         """
         Cambia la base de datos activa en el cliente de InfluxDB.
-
-        :param database: Nombre de la base de datos a utilizar.
-        :type database: str
-        :return: None
-
-        **Ejemplo de uso**:
-
-        .. code-block:: python
-
-            influxdb_op = InfluxdbOperation(host="localhost", port=8086)
-            influxdb_op.switch_database("mi_base_de_datos")
         """
         if database not in self._client.get_list_database():
             self._client.create_database(database)
@@ -99,24 +150,6 @@ class InfluxdbOperation(InfluxdbConnection):
     ) -> pd.DataFrame:
         """
         Ejecuta una consulta en InfluxDB y devuelve los resultados en un DataFrame.
-
-        :param query: Query a ejecutar en InfluxDB.
-        :type query: str
-        :param database: Nombre de la base de datos en InfluxDB. Si no se especifica, utiliza la base de datos activa.
-        :type database: Optional[str]
-        :return: DataFrame con los resultados de la consulta.
-        :rtype: pd.DataFrame
-        :raises ValueError: Si no se encuentran datos.
-
-        **Ejemplo de uso**:
-
-        .. code-block:: python
-
-            influxdb_op = InfluxdbOperation(host="localhost", port=8086)
-            influxdb_op.switch_database("mi_base_de_datos")
-            query = "SELECT * FROM my_measurement LIMIT 10"
-            data = influxdb_op.get_data(query=query)
-            print(data)
         """
         db_to_use = database or self._database
         if db_to_use is None:
@@ -140,6 +173,7 @@ class InfluxdbOperation(InfluxdbConnection):
         df = pd.DataFrame(data_list)
         if "time" in df.columns:
             df = df.set_index("time")
+            df.index = pd.to_datetime(df.index)
 
         return df
 
@@ -147,101 +181,108 @@ class InfluxdbOperation(InfluxdbConnection):
         """
         Normaliza el valor para su escritura en InfluxDB.
 
-        :param value: Valor a normalizar.
-        :type value: Any
-        :return: El valor normalizado.
-        :rtype: Any
+        Esta funcion valida y convierte valores para asegurar compatibilidad con InfluxDB.
 
-        **Ejemplo de uso**:
+        Args:
+            value: Valor a normalizar.
 
-        .. code-block:: python
-
-            influxdb_op = InfluxdbOperation(host="localhost", port=8086)
-            normalized_value = influxdb_op.normalize_value_to_write(42)
-            print(normalized_value)  # 42.0
+        Returns:
+            Valor normalizado o None si no es valido.
         """
-        if isinstance(value, int):
-            return float(value)
-        elif isinstance(value, float):
-            return value
-        else:
-            return value
+        # Verificar si es NaN, None o infinito
+        if value is None:
+            return None
+
+        # Manejar valores numericos especiales
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            # Convertir tipos numpy a tipos nativos Python
+            if isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                value = int(value)
+            elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
+                value = float(value)
+
+            # Verificar NaN e infinitos
+            if isinstance(value, float):
+                if math.isnan(value) or math.isinf(value):
+                    return None
+                return value
+            elif isinstance(value, int):
+                return float(value)
+
+        # Manejar booleanos
+        elif isinstance(value, (bool, np.bool_)):
+            return bool(value)
+
+        # Manejar strings
+        elif isinstance(value, (str, np.str_)):
+            value_str = str(value).strip()
+            # Filtrar strings vacios o con valores especiales
+            if value_str in ['', 'nan', 'NaN', 'None', 'null', 'NULL']:
+                return None
+            return value_str
+
+        # Manejar pandas.NA o numpy.nan
+        elif pd.isna(value):
+            return None
+
+        return value
+
+    def _validate_point(self, point: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Valida y limpia un punto antes de escribirlo en InfluxDB.
+
+        Args:
+            point: Diccionario representando un punto de datos.
+
+        Returns:
+            Punto validado o None si no es valido.
+        """
+        if not point or 'fields' not in point:
+            return None
+
+        # Filtrar campos con valores None o NaN
+        validated_fields = {}
+        for field_key, field_value in point['fields'].items():
+            normalized_value = self.normalize_value_to_write(field_value)
+            if normalized_value is not None:
+                validated_fields[field_key] = normalized_value
+
+        # Si no quedan campos validos, el punto es invalido
+        if not validated_fields:
+            return None
+
+        point['fields'] = validated_fields
+        return point
 
     def write_points(
         self,
         points: list,
         database: Optional[str] = None,
         tags: Optional[dict] = None,
-        clean_previous: bool = False,
-    ) -> None:
+        batch_size: int = 5000,
+        validate_data: bool = True,
+    ) -> Dict[str, int]:
         """
-        Escribe una lista de puntos directamente en InfluxDB, con soporte para la actualizacion de registros mediante tags.
+        Escribe una lista de puntos directamente en InfluxDB, asegurando que el timestamp este en UTC.
 
-        Este metodo permite escribir una lista de puntos en InfluxDB. Si se proporciona el parametro `tags`, estos se
-        aplicaran como tags adicionales o sobrescribirán los existentes en cada punto. Adicionalmente, si se establece
-        el parametro `clean_previous` como `True`, se eliminaran los registros existentes con tags que no coincidan con los
-        proporcionados antes de escribir los nuevos puntos.
+        Args:
+            points: Lista de puntos a escribir. Cada punto debe ser un diccionario con
+                   las claves 'measurement', 'time', 'fields' y opcionalmente 'tags'.
+            database: Nombre de la base de datos donde escribir (opcional si ya esta configurada).
+            tags: Tags adicionales para agregar a todos los puntos.
+            batch_size: Tamaño del lote para escritura. Por defecto 5000.
+            validate_data: Si True, valida y limpia los puntos antes de escribir.
 
-        :param points: Lista de puntos a escribir en InfluxDB. Cada punto debe incluir al menos las claves
-            `measurement`, `time`, y `fields`. Los tags son opcionales, pero pueden incluirse para clasificar los puntos.
-        :type points: list
-        :param database: El nombre de la base de datos en la que se escribiran los puntos. Si no se especifica,
-            se utilizara la base de datos activa.
-        :type database: Optional[str]
-        :param tags: Diccionario de tags adicionales a agregar o sobrescribir en los puntos proporcionados.
-        :type tags: Optional[dict]
-        :param clean_previous: Si es True, elimina registros conflictivos antes de escribir los nuevos puntos.
-            Los registros conflictivos son aquellos con el mismo `time` pero cuyos tags no coinciden con los
-            proporcionados en los nuevos puntos. Por defecto es False.
-        :type clean_previous: bool
-        :raises ValueError:
-            - Si no se proporciona una lista de puntos valida.
-            - Si no se especifica una base de datos valida.
+        Returns:
+            Diccionario con estadisticas de escritura: {
+                'total_points': int,
+                'written_points': int,
+                'invalid_points': int,
+                'batches': int
+            }
 
-        **Ejemplo de uso basico**:
-
-        .. code-block:: python
-
-            points = [
-                {"measurement": "test_tags", "time": "2023-01-01T00:00:00", "fields": {"value": 10}},
-                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}}
-            ]
-
-            influxdb_op.write_points(points=points, database="test_db")
-
-        **Ejemplo con tags adicionales**:
-
-        .. code-block:: python
-
-            points = [
-                {"measurement": "test_tags", "time": "2023-01-01T00:00:00", "fields": {"value": 10}, "tags": {"sensor": "A"}},
-                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}, "tags": {"sensor": "B"}}
-            ]
-
-            influxdb_op.write_points(points=points, database="test_db", tags={"location": "site_1"})
-
-            # Esto agregara el tag "location: site_1" a ambos puntos.
-
-        **Ejemplo de actualizacion de registros con tags**:
-
-        .. code-block:: python
-
-            points = [
-                {"measurement": "test_tags", "time": "2023-01-01T00:00:00", "fields": {"value": 10}, "tags": {"sensor": "A"}},
-                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}, "tags": {"sensor": "B"}}
-            ]
-
-            # Escribir puntos iniciales
-            influxdb_op.write_points(points=points, database="test_db")
-
-            # Actualizar el tag "sensor" para el segundo punto
-            updated_points = [
-                {"measurement": "test_tags", "time": "2023-01-01T01:00:00", "fields": {"value": 20}, "tags": {"sensor": "C"}}
-            ]
-
-            influxdb_op.write_points(points=updated_points, database="test_db", clean_previous=True)
-
-            # Esto eliminara el registro original con "sensor: B" y escribira el nuevo con "sensor: C".
+        Raises:
+            ValueError: Si no se proporciona base de datos o la lista de puntos esta vacia.
         """
         db_to_use = database or self._database
         if db_to_use is None:
@@ -253,41 +294,48 @@ class InfluxdbOperation(InfluxdbConnection):
         if not points:
             raise ValueError("La lista de puntos no puede estar vacia.")
 
-        # Agregar tags adicionales a los puntos
-        if tags:
-            for point in points:
+        total_points = len(points)
+        validated_points = []
+        invalid_count = 0
+
+        for point in points:
+            # Convertir timestamp a UTC
+            if "time" in point:
+                point["time"] = DateUtils.convert_datetime(
+                    datetime_value=point["time"], output_format="iso8601", to_utc=True
+                )
+
+            # Agregar tags adicionales
+            if tags:
                 point["tags"] = {**point.get("tags", {}), **tags}
 
-        if clean_previous:
-            # Eliminar registros conflictivos
-            for point in points:
-                measurement = point.get("measurement")
-                time = DateUtils.convert_datetime(
-                    datetime_value=point.get("time"), output_format="iso8601"
-                )
-                point_tags = point.get("tags", {})
+            # Validar el punto si se solicita
+            if validate_data:
+                validated_point = self._validate_point(point)
+                if validated_point is not None:
+                    validated_points.append(validated_point)
+                else:
+                    invalid_count += 1
+            else:
+                validated_points.append(point)
 
-                if not measurement or not time:
-                    raise ValueError(
-                        "Todos los puntos deben especificar 'measurement' y 'time'."
-                    )
+        # Escribir en lotes
+        written_count = 0
+        batch_count = 0
+        for i in range(0, len(validated_points), batch_size):
+            batch = validated_points[i:i + batch_size]
+            self._client.write_points(
+                points=batch, database=db_to_use, batch_size=batch_size
+            )
+            written_count += len(batch)
+            batch_count += 1
 
-                # Construir consulta para eliminar solo registros conflictivos
-                tag_filter = " OR ".join(
-                    [f"{key}!='{value}'" for key, value in point_tags.items()]
-                )
-                delete_query = (
-                    f"DELETE FROM {measurement} WHERE time = '{time}'"
-                )
-                if tag_filter:
-                    delete_query += f" AND {tag_filter}"
-
-                self._client.query(delete_query, database=db_to_use)
-
-        # Escribir los puntos
-        self._client.write_points(
-            points=points, database=db_to_use, batch_size=5000
-        )
+        return {
+            'total_points': total_points,
+            'written_points': written_count,
+            'invalid_points': invalid_count,
+            'batches': batch_count
+        }
 
     def write_dataframe(
         self,
@@ -295,123 +343,598 @@ class InfluxdbOperation(InfluxdbConnection):
         data: pd.DataFrame,
         tags: Optional[dict] = None,
         database: Optional[str] = None,
+        batch_size: int = 1000,
+        validate_data: bool = True,
         pass_to_float: bool = True,
         convert_bool_to_float: bool = False,
         suffix_bool_to_float: str = "_bool_to_float",
-        clean_previous_tags: bool = False,
-    ) -> None:
+        drop_na_rows: bool = False,
+    ) -> Dict[str, int]:
         """
-        Convierte un DataFrame en una lista de puntos y los escribe en InfluxDB, con soporte para la gestion de tags.
+        Convierte un DataFrame en una lista de puntos y los escribe en InfluxDB,
+        con validacion avanzada y limpieza de datos.
 
-        Este metodo toma un DataFrame de pandas y lo convierte en una lista de puntos para escribir en InfluxDB.
-        Los valores NaN en el DataFrame seran excluidos de los puntos generados. Si se especifica el parametro `tags`,
-        estos se agregaran como tags adicionales a cada punto. Adicionalmente, si se establece `clean_previous_tags` como
-        `True`, se eliminaran los registros existentes que no coincidan con los nuevos tags antes de escribir los puntos.
+        Este metodo maneja automaticamente:
+        - Valores NaN, None, e infinitos
+        - Conversion de tipos numpy a tipos nativos Python
+        - Validacion de cada punto antes de escribir
+        - Escritura por lotes para DataFrames grandes
+        - Conversion de timestamps a UTC
 
-        :param measurement: Nombre de la medida en InfluxDB.
-        :type measurement: str
-        :param data: DataFrame de pandas con los datos a convertir. El indice debe ser de tipo datetime.
-        :type data: pd.DataFrame
-        :param tags: Diccionario de tags a asociar a los puntos generados.
-        :type tags: Optional[dict]
-        :param database: El nombre de la base de datos en la que se escribiran los puntos. Si no se especifica,
-            se utilizara la base de datos activa.
-        :type database: Optional[str]
-        :param pass_to_float: Si es True, convierte valores int y bool a float antes de escribirlos en InfluxDB. Por defecto es True.
-        :type pass_to_float: bool
-        :param convert_bool_to_float: Si es True, duplica las columnas de tipo bool y las convierte a float. Por defecto es False.
-        :type convert_bool_to_float: bool
-        :param suffix_bool_to_float: Sufijo de las nuevas columnas de tipo float provenientes de columnas de tipo bool.
-        :type suffix_bool_to_float: str
-        :param clean_previous_tags: Si es True, elimina los puntos existentes que no coincidan con los nuevos tags antes
-            de escribir los puntos generados. Por defecto es False.
-        :type clean_previous_tags: bool
-        :raises ValueError:
-            - Si no se proporciona un DataFrame o un nombre de medida valido.
-            - Si el indice del DataFrame no es convertible a un indice de tipo datetime.
+        Args:
+            measurement: Nombre de la medicion en InfluxDB.
+            data: DataFrame con los datos a escribir. El indice debe ser DatetimeIndex.
+            tags: Tags adicionales para todos los puntos (opcional).
+            database: Base de datos donde escribir (opcional si ya esta configurada).
+            batch_size: Tamaño del lote para escritura. Por defecto 1000.
+                       Reducir si tiene problemas de memoria con DataFrames grandes.
+            validate_data: Si True, valida y limpia datos antes de escribir.
+            pass_to_float: Si True, convierte enteros a float para compatibilidad InfluxDB.
+            convert_bool_to_float: Si True, convierte columnas booleanas a float.
+            suffix_bool_to_float: Sufijo para columnas booleanas convertidas.
+            drop_na_rows: Si True, elimina filas donde todos los valores son NaN.
 
-        **Ejemplo de uso basico**:
+        Returns:
+            Diccionario con estadisticas de escritura.
 
-        .. code-block:: python
+        Raises:
+            ValueError: Si no se proporciona DataFrame o measurement.
+            TypeError: Si el indice del DataFrame no es DatetimeIndex.
 
-            import pandas as pd
-
-            data = pd.DataFrame({
-                "value": [10, 20, None, 40],
-                "sensor": ["A", "B", "C", "D"]
-            }, index=pd.date_range(start="2023-01-01", periods=4, freq="H"))
-
-            influxdb_op.write_dataframe(
-                measurement="test_tags",
-                data=data,
-                database="test_db"
-            )
-
-        **Ejemplo con tags adicionales**:
-
-        .. code-block:: python
-
-            influxdb_op.write_dataframe(
-                measurement="test_tags",
-                data=data,
-                tags={"location": "site_1"},
-                database="test_db"
-            )
-
-            # Esto agregara el tag "location: site_1" a todos los puntos generados.
-
-        **Ejemplo de actualizacion de registros con tags**:
-
-        .. code-block:: python
-
-            influxdb_op.write_dataframe(
-                measurement="test_tags",
-                data=data,
-                tags={"location": "updated_site"},
-                database="test_db",
-                clean_previous_tags=True
-            )
-
-            # Esto eliminara los registros que no coincidan con los nuevos tags y actualizara los puntos existentes.
+        Ejemplos:
+            >>> df = pd.DataFrame({
+            ...     'temperatura': [20.5, np.nan, 21.0, 22.5],
+            ...     'humedad': [45.0, 50.0, np.nan, 55.0]
+            ... }, index=pd.date_range('2024-01-01', periods=4, freq='H'))
+            >>>
+            >>> stats = influx.write_dataframe(
+            ...     measurement='clima',
+            ...     data=df,
+            ...     database='mi_db',
+            ...     batch_size=1000,
+            ...     validate_data=True
+            ... )
+            >>> print(f"Escritos: {stats['written_points']}/{stats['total_points']}")
         """
         if data is None or measurement is None:
             raise ValueError(
                 "Debe proporcionar un DataFrame 'data' y un 'measurement'."
             )
 
-        # Seleccionar las columnas booleanas y convertirlas a float si es necesario
-        if convert_bool_to_float:
-            for column in data.select_dtypes(include=["bool"]).columns:
-                data[f"{column}{suffix_bool_to_float}"] = data[column].astype(
-                    float
-                )
+        if not isinstance(data.index, pd.DatetimeIndex):
+            raise TypeError("El indice del DataFrame debe ser de tipo DatetimeIndex.")
 
-        # Crear lista de puntos a partir del DataFrame
+        # Crear una copia para no modificar el original
+        df = data.copy()
+
+        # Eliminar filas completamente vacias si se solicita
+        if drop_na_rows:
+            df = df.dropna(how='all')
+
+        # Convertir columnas booleanas si se solicita
+        if convert_bool_to_float:
+            for column in df.select_dtypes(include=["bool"]).columns:
+                df[f"{column}{suffix_bool_to_float}"] = df[column].astype(float)
+                df = df.drop(columns=[column])
+
+        # Convertir DataFrame a lista de diccionarios de puntos
         points = []
-        for index, row in data.iterrows():
-            fields = {
-                field: (
-                    self.normalize_value_to_write(value)
-                    if pass_to_float
-                    else value
-                )
-                for field, value in row.items()
-                if pd.notna(value)
-            }
+        for index, row in df.iterrows():
+            # Construir los campos, aplicando normalizacion
+            fields = {}
+            for field, value in row.items():
+                # Saltar valores NaN
+                if pd.isna(value):
+                    continue
+
+                # Normalizar el valor
+                if validate_data:
+                    normalized_value = self.normalize_value_to_write(value)
+                    if normalized_value is not None:
+                        fields[field] = normalized_value
+                else:
+                    # Sin validacion, solo aplicar conversion basica
+                    if pass_to_float and isinstance(value, (int, np.integer)):
+                        fields[field] = float(value)
+                    else:
+                        fields[field] = value
+
+            # Solo agregar el punto si tiene campos validos
             if fields:
                 point = {
                     "measurement": measurement,
                     "time": DateUtils.convert_datetime(
-                        datetime_value=index, output_format="iso8601"
+                        datetime_value=index, output_format="iso8601", to_utc=True
                     ),
                     "fields": fields,
                 }
+
+                # Agregar tags si se proporcionaron
+                if tags:
+                    point["tags"] = tags
+
                 points.append(point)
 
-        # Delegar la escritura a write_points
-        self.write_points(
+        # Escribir los puntos usando el metodo write_points mejorado
+        return self.write_points(
             points=points,
             database=database,
-            tags=tags,
-            clean_previous=clean_previous_tags,
+            tags=None,  # Ya los agregamos arriba
+            batch_size=batch_size,
+            validate_data=False,  # Ya validamos arriba
         )
+
+    def delete(
+        self,
+        measurement: str,
+        start_time: Optional[Union[str, pd.Timestamp]] = None,
+        end_time: Optional[Union[str, pd.Timestamp]] = None,
+        filters: Optional[Dict[str, str]] = None,
+        database: Optional[str] = None,
+    ) -> None:
+        """
+        Elimina datos de una medicion en InfluxDB.
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        query = f"DELETE FROM \"{measurement}\""
+        where_clauses = []
+
+        if start_time:
+            start_time_utc = DateUtils.convert_datetime(start_time, to_utc=True, output_format='iso8601')
+            where_clauses.append(f"time >= '{start_time_utc}'")
+
+        if end_time:
+            end_time_utc = DateUtils.convert_datetime(end_time, to_utc=True, output_format='iso8601')
+            where_clauses.append(f"time <= '{end_time_utc}'")
+
+        if filters:
+            for key, value in filters.items():
+                where_clauses.append(f"\"{key}\" = '{value}'")
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        self._client.query(query)
+
+    def get_field_keys_grouped_by_type(self, measurement: str) -> Dict[str, List[str]]:
+        """
+        Obtiene las claves de un measurement, agrupadas por tipo de dato.
+        """
+        query = f"SHOW FIELD KEYS FROM \"{measurement}\""
+        results = list(self._client.query(query).get_points())
+        field_type_dict = defaultdict(list)
+
+        for result in results:
+            field_type_dict[result["fieldType"]].append(result["fieldKey"])
+
+        return dict(field_type_dict)
+
+    def build_query_fields(
+        self, fields: Union[List[str], Dict[str, List[str]]], operation: str
+    ) -> Dict[str, str]:
+        """
+        Construye una parte de la consulta de InfluxDB aplicando una operacion a cada campo.
+        """
+        query_fields = defaultdict(str)
+
+        if isinstance(fields, list):
+            query_fields["fields"] = ", ".join(
+                [f'{operation}("{field}") AS "{field}"' for field in fields]
+            )
+
+        if isinstance(fields, dict):
+            for field_type, field_list in fields.items():
+                if field_type in ["boolean", "integer"]:
+                    query_parts = [f'"{field}"' for field in field_list]
+                else:
+                    query_parts = [
+                        f'{operation}("{field}") AS "{field}"'
+                        for field in field_list
+                    ]
+                query_fields[field_type] = ", ".join(query_parts)
+
+        return dict(query_fields)
+
+    # ==================== METODOS ADMINISTRATIVOS ====================
+
+    def list_databases(self) -> List[str]:
+        """
+        Lista todas las bases de datos disponibles en InfluxDB.
+
+        Returns:
+            Lista con los nombres de las bases de datos.
+
+        Ejemplos:
+            >>> influx = InfluxdbOperation(host='localhost', port=8086)
+            >>> databases = influx.list_databases()
+            >>> print(databases)
+            ['_internal', 'mi_db', 'otra_db']
+        """
+        result = self._client.get_list_database()
+        return [db['name'] for db in result]
+
+    def database_exists(self, database: str) -> bool:
+        """
+        Verifica si una base de datos existe.
+
+        Args:
+            database: Nombre de la base de datos a verificar.
+
+        Returns:
+            True si la base de datos existe, False en caso contrario.
+        """
+        databases = self.list_databases()
+        return database in databases
+
+    def create_database(self, database: str) -> None:
+        """
+        Crea una nueva base de datos en InfluxDB.
+
+        Args:
+            database: Nombre de la base de datos a crear.
+
+        Ejemplos:
+            >>> influx.create_database('nueva_db')
+        """
+        self._client.create_database(database)
+
+    def drop_database(self, database: str, confirm: bool = False) -> None:
+        """
+        Elimina una base de datos de InfluxDB.
+
+        Args:
+            database: Nombre de la base de datos a eliminar.
+            confirm: Debe ser True para confirmar la eliminacion (seguridad).
+
+        Raises:
+            ValueError: Si confirm no es True.
+
+        Ejemplos:
+            >>> influx.drop_database('vieja_db', confirm=True)
+        """
+        if not confirm:
+            raise ValueError(
+                "Debe confirmar la eliminacion de la base de datos estableciendo confirm=True"
+            )
+        self._client.drop_database(database)
+
+    def list_measurements(self, database: Optional[str] = None) -> List[str]:
+        """
+        Lista todas las mediciones en una base de datos.
+
+        Args:
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Lista con los nombres de las mediciones.
+
+        Ejemplos:
+            >>> measurements = influx.list_measurements('mi_db')
+            >>> print(measurements)
+            ['temperatura', 'humedad', 'presion']
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        result = self._client.query("SHOW MEASUREMENTS")
+        points = list(result.get_points())
+        return [point['name'] for point in points]
+
+    def measurement_exists(self, measurement: str, database: Optional[str] = None) -> bool:
+        """
+        Verifica si una medicion existe en la base de datos.
+
+        Args:
+            measurement: Nombre de la medicion a verificar.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            True si la medicion existe, False en caso contrario.
+        """
+        measurements = self.list_measurements(database)
+        return measurement in measurements
+
+    def drop_measurement(self, measurement: str, database: Optional[str] = None, confirm: bool = False) -> None:
+        """
+        Elimina una medicion (y todos sus datos) de la base de datos.
+
+        Args:
+            measurement: Nombre de la medicion a eliminar.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+            confirm: Debe ser True para confirmar la eliminacion (seguridad).
+
+        Raises:
+            ValueError: Si confirm no es True.
+
+        Ejemplos:
+            >>> influx.drop_measurement('vieja_medicion', confirm=True)
+        """
+        if not confirm:
+            raise ValueError(
+                "Debe confirmar la eliminacion de la medicion estableciendo confirm=True"
+            )
+
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        self._client.query(f'DROP MEASUREMENT "{measurement}"')
+
+    def list_tags(self, measurement: str, database: Optional[str] = None) -> List[str]:
+        """
+        Lista todos los tags de una medicion.
+
+        Args:
+            measurement: Nombre de la medicion.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Lista con los nombres de los tags.
+
+        Ejemplos:
+            >>> tags = influx.list_tags('temperatura', 'mi_db')
+            >>> print(tags)
+            ['sensor_id', 'location', 'type']
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        query = f'SHOW TAG KEYS FROM "{measurement}"'
+        result = self._client.query(query)
+        points = list(result.get_points())
+        return [point['tagKey'] for point in points]
+
+    def list_tag_values(self, measurement: str, tag_key: str, database: Optional[str] = None) -> List[str]:
+        """
+        Lista todos los valores de un tag especifico en una medicion.
+
+        Args:
+            measurement: Nombre de la medicion.
+            tag_key: Nombre del tag.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Lista con los valores del tag.
+
+        Ejemplos:
+            >>> values = influx.list_tag_values('temperatura', 'location', 'mi_db')
+            >>> print(values)
+            ['salon', 'cocina', 'dormitorio']
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        query = f'SHOW TAG VALUES FROM "{measurement}" WITH KEY = "{tag_key}"'
+        result = self._client.query(query)
+        points = list(result.get_points())
+        return [point['value'] for point in points]
+
+    def list_fields(self, measurement: str, database: Optional[str] = None) -> Dict[str, str]:
+        """
+        Lista todos los campos de una medicion con sus tipos.
+
+        Args:
+            measurement: Nombre de la medicion.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Diccionario con nombres de campos como claves y tipos como valores.
+
+        Ejemplos:
+            >>> fields = influx.list_fields('temperatura', 'mi_db')
+            >>> print(fields)
+            {'temperatura': 'float', 'humedad': 'float', 'activo': 'boolean'}
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        query = f'SHOW FIELD KEYS FROM "{measurement}"'
+        result = self._client.query(query)
+        points = list(result.get_points())
+        return {point['fieldKey']: point['fieldType'] for point in points}
+
+    def get_measurement_cardinality(self, measurement: str, database: Optional[str] = None) -> int:
+        """
+        Obtiene la cardinalidad (numero de series unicas) de una medicion.
+
+        La cardinalidad es el numero de combinaciones unicas de tags en una medicion.
+        Una cardinalidad alta puede afectar el rendimiento.
+
+        Args:
+            measurement: Nombre de la medicion.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Numero de series unicas en la medicion.
+
+        Ejemplos:
+            >>> cardinality = influx.get_measurement_cardinality('temperatura', 'mi_db')
+            >>> print(f"Series unicas: {cardinality}")
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        query = f'SHOW SERIES FROM "{measurement}"'
+        result = self._client.query(query)
+        points = list(result.get_points())
+        return len(points)
+
+    def get_retention_policies(self, database: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Lista las politicas de retencion de una base de datos.
+
+        Args:
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Lista de diccionarios con informacion de las politicas de retencion.
+
+        Ejemplos:
+            >>> policies = influx.get_retention_policies('mi_db')
+            >>> for policy in policies:
+            ...     print(f"{policy['name']}: {policy['duration']}")
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        result = self._client.get_list_retention_policies(db_to_use)
+        return result
+
+    def count_points(self, measurement: str, database: Optional[str] = None,
+                    start_time: Optional[str] = None, end_time: Optional[str] = None) -> int:
+        """
+        Cuenta el numero de puntos en una medicion.
+
+        Args:
+            measurement: Nombre de la medicion.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+            start_time: Tiempo de inicio para el conteo (opcional).
+            end_time: Tiempo de fin para el conteo (opcional).
+
+        Returns:
+            Numero de puntos en la medicion.
+
+        Ejemplos:
+            >>> # Contar todos los puntos
+            >>> total = influx.count_points('temperatura', 'mi_db')
+            >>> print(f"Total de puntos: {total}")
+            >>>
+            >>> # Contar puntos en un rango de tiempo
+            >>> total = influx.count_points(
+            ...     'temperatura',
+            ...     'mi_db',
+            ...     start_time='2024-01-01T00:00:00Z',
+            ...     end_time='2024-01-31T23:59:59Z'
+            ... )
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        query = f'SELECT COUNT(*) FROM "{measurement}"'
+
+        where_clauses = []
+        if start_time:
+            where_clauses.append(f"time >= '{start_time}'")
+        if end_time:
+            where_clauses.append(f"time <= '{end_time}'")
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        result = self._client.query(query)
+        points = list(result.get_points())
+
+        if points:
+            # Obtener el primer valor de conteo disponible
+            for key, value in points[0].items():
+                if key.startswith('count_'):
+                    return int(value) if value is not None else 0
+
+        return 0
+
+    def get_database_info(self, database: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Obtiene informacion completa sobre una base de datos.
+
+        Args:
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Diccionario con informacion de la base de datos:
+            - name: Nombre de la base de datos
+            - measurements: Lista de mediciones
+            - retention_policies: Politicas de retencion
+
+        Ejemplos:
+            >>> info = influx.get_database_info('mi_db')
+            >>> print(f"Base de datos: {info['name']}")
+            >>> print(f"Mediciones: {len(info['measurements'])}")
+            >>> for measurement in info['measurements']:
+            ...     print(f"  - {measurement}")
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+
+        return {
+            'name': db_to_use,
+            'measurements': self.list_measurements(db_to_use),
+            'retention_policies': self.get_retention_policies(db_to_use),
+        }
+
+    def get_measurement_info(self, measurement: str, database: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Obtiene informacion completa sobre una medicion.
+
+        Args:
+            measurement: Nombre de la medicion.
+            database: Nombre de la base de datos (opcional si ya esta configurada).
+
+        Returns:
+            Diccionario con informacion de la medicion:
+            - name: Nombre de la medicion
+            - tags: Lista de tags
+            - fields: Diccionario de campos con sus tipos
+            - cardinality: Numero de series unicas
+            - point_count: Numero total de puntos
+
+        Ejemplos:
+            >>> info = influx.get_measurement_info('temperatura', 'mi_db')
+            >>> print(f"Medicion: {info['name']}")
+            >>> print(f"Tags: {info['tags']}")
+            >>> print(f"Campos: {info['fields']}")
+            >>> print(f"Total puntos: {info['point_count']}")
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+
+        return {
+            'name': measurement,
+            'tags': self.list_tags(measurement, db_to_use),
+            'fields': self.list_fields(measurement, db_to_use),
+            'cardinality': self.get_measurement_cardinality(measurement, db_to_use),
+            'point_count': self.count_points(measurement, db_to_use),
+        }
+
