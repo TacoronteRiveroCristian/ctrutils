@@ -4,14 +4,17 @@ InfluxDB utilizando un cliente `InfluxDBClient`.
 """
 
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable
+from datetime import datetime, timezone
 import math
+import time
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 
 import pandas as pd  # type: ignore
 import numpy as np  # type: ignore
 from influxdb import InfluxDBClient
-
-from ctrutils.utils.date_utils import DateUtils
 
 
 class InfluxdbOperation:
@@ -102,6 +105,175 @@ class InfluxdbOperation:
         self._database: Optional[str] = None
         self._headers = {"Accept": "application/json"}
         self._gzip = True
+        self._logger: Optional[logging.Logger] = None
+        self._retry_attempts = 3
+        self._retry_delay = 1  # segundos
+        self._metrics = {
+            'total_writes': 0,
+            'total_points': 0,
+            'failed_writes': 0,
+            'total_write_time': 0.0
+        }
+
+    # ==================== UTILIDADES INTERNAS ====================
+
+    @staticmethod
+    def _convert_to_utc_iso(dt: Union[str, datetime, pd.Timestamp]) -> str:
+        """
+        Convierte un datetime a formato ISO8601 en UTC.
+
+        Args:
+            dt: Datetime a convertir (string, datetime o Timestamp).
+
+        Returns:
+            String en formato ISO8601 UTC.
+        """
+        if isinstance(dt, str):
+            # Ya es string, asumimos que está en formato correcto
+            return dt
+        elif isinstance(dt, pd.Timestamp):
+            dt = dt.to_pydatetime()
+
+        # Convertir a UTC si tiene timezone, o asumirlo como UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+
+        return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+    def _setup_logger(self, name: str = 'InfluxdbOperation', level: int = logging.INFO) -> None:
+        """
+        Configura el logger para la clase.
+
+        Args:
+            name: Nombre del logger.
+            level: Nivel de logging.
+        """
+        self._logger = logging.getLogger(name)
+        self._logger.setLevel(level)
+        if not self._logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            handler.setFormatter(formatter)
+            self._logger.addHandler(handler)
+
+    def enable_logging(self, level: int = logging.INFO) -> None:
+        """
+        Activa el logging para debugging y monitoreo.
+
+        Args:
+            level: Nivel de logging (logging.DEBUG, INFO, WARNING, ERROR).
+
+        Ejemplos:
+            >>> influx = InfluxdbOperation(host='localhost', port=8086)
+            >>> influx.enable_logging(logging.DEBUG)
+        """
+        self._setup_logger(level=level)
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Obtiene métricas de rendimiento de las operaciones.
+
+        Returns:
+            Diccionario con métricas de escritura.
+
+        Ejemplos:
+            >>> metrics = influx.get_metrics()
+            >>> print(f"Total writes: {metrics['total_writes']}")
+            >>> print(f"Avg write time: {metrics['avg_write_time']:.2f}s")
+        """
+        avg_time = (
+            self._metrics['total_write_time'] / self._metrics['total_writes']
+            if self._metrics['total_writes'] > 0 else 0
+        )
+        return {
+            **self._metrics,
+            'avg_write_time': avg_time,
+            'success_rate': (
+                (self._metrics['total_writes'] - self._metrics['failed_writes']) /
+                self._metrics['total_writes'] * 100
+                if self._metrics['total_writes'] > 0 else 0
+            )
+        }
+
+    def reset_metrics(self) -> None:
+        """Reinicia las métricas de rendimiento."""
+        self._metrics = {
+            'total_writes': 0,
+            'total_points': 0,
+            'failed_writes': 0,
+            'total_write_time': 0.0
+        }
+
+    def _retry_operation(
+        self,
+        operation: Callable,
+        *args,
+        max_attempts: Optional[int] = None,
+        **kwargs
+    ) -> Any:
+        """
+        Ejecuta una operación con reintentos automáticos.
+
+        Args:
+            operation: Función a ejecutar.
+            max_attempts: Número máximo de intentos (usa self._retry_attempts si es None).
+            *args, **kwargs: Argumentos para la operación.
+
+        Returns:
+            Resultado de la operación.
+
+        Raises:
+            Exception: Si todos los intentos fallan.
+        """
+        attempts = max_attempts or self._retry_attempts
+        last_exception = None
+
+        for attempt in range(attempts):
+            try:
+                return operation(*args, **kwargs)
+            except Exception as e:
+                last_exception = e
+                if self._logger:
+                    self._logger.warning(
+                        f"Intento {attempt + 1}/{attempts} falló: {e}"
+                    )
+                if attempt < attempts - 1:
+                    # Backoff exponencial
+                    sleep_time = self._retry_delay * (2 ** attempt)
+                    time.sleep(sleep_time)
+
+        raise last_exception or Exception("Operación falló después de reintentos")
+
+    @contextmanager
+    def transaction(self, database: Optional[str] = None):
+        """
+        Context manager para operaciones transaccionales.
+
+        Args:
+            database: Base de datos para la transacción.
+
+        Ejemplos:
+            >>> with influx.transaction('mi_db') as db:
+            ...     influx.write_dataframe(measurement='datos', data=df)
+            ...     influx.write_points(points=points)
+        """
+        if database:
+            original_db = self._database
+            self.switch_database(database)
+
+        try:
+            yield self
+        except Exception as e:
+            if self._logger:
+                self._logger.error(f"Error en transacción: {e}")
+            raise
+        finally:
+            if database and original_db:
+                self.switch_database(original_db)
 
     @property
     def get_client_info(self) -> Dict[str, Any]:
@@ -301,9 +473,7 @@ class InfluxdbOperation:
         for point in points:
             # Convertir timestamp a UTC
             if "time" in point:
-                point["time"] = DateUtils.convert_datetime(
-                    datetime_value=point["time"], output_format="iso8601", to_utc=True
-                )
+                point["time"] = self._convert_to_utc_iso(point["time"])
 
             # Agregar tags adicionales
             if tags:
@@ -443,9 +613,7 @@ class InfluxdbOperation:
             if fields:
                 point = {
                     "measurement": measurement,
-                    "time": DateUtils.convert_datetime(
-                        datetime_value=index, output_format="iso8601", to_utc=True
-                    ),
+                    "time": self._convert_to_utc_iso(index),
                     "fields": fields,
                 }
 
@@ -463,6 +631,512 @@ class InfluxdbOperation:
             batch_size=batch_size,
             validate_data=False,  # Ya validamos arriba
         )
+
+    def write_dataframe_parallel(
+        self,
+        df: pd.DataFrame,
+        measurement: str,
+        tags: Optional[Dict[str, str]] = None,
+        field_columns: Optional[List[str]] = None,
+        tag_columns: Optional[List[str]] = None,
+        batch_size: int = 5000,
+        max_workers: int = 4,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        database: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Escribe un DataFrame a InfluxDB usando procesamiento paralelo.
+        
+        Args:
+            df: DataFrame con datos a escribir
+            measurement: Nombre de la medicion
+            tags: Tags adicionales a agregar a todos los puntos
+            field_columns: Columnas a usar como fields (None = todas las numericas)
+            tag_columns: Columnas a usar como tags
+            batch_size: Tamaño de cada batch
+            max_workers: Numero maximo de threads para procesamiento paralelo
+            progress_callback: Funcion opcional(processed, total) para reportar progreso
+            database: Nombre de la base de datos (None = usa la actual)
+            
+        Returns:
+            Diccionario con estadisticas de la operacion
+        """
+        if df.empty:
+            return {"total_points": 0, "successful": 0, "failed": 0, "duration": 0.0}
+        
+        start_time = time.time()
+        total_rows = len(df)
+        processed = 0
+        successful = 0
+        failed = 0
+        
+        # Dividir DataFrame en chunks
+        chunks = [df.iloc[i:i + batch_size] for i in range(0, total_rows, batch_size)]
+        
+        # Funcion para procesar cada chunk
+        def process_chunk(chunk_data):
+            try:
+                stats = self.write_dataframe(
+                    df=chunk_data,
+                    measurement=measurement,
+                    tags=tags,
+                    field_columns=field_columns,
+                    tag_columns=tag_columns,
+                    batch_size=batch_size,
+                    validate_data=True,
+                    database=database
+                )
+                return stats['successful'], stats['failed']
+            except Exception as e:
+                if self._logger:
+                    self._logger.error(f"Error procesando chunk: {e}")
+                return 0, len(chunk_data)
+        
+        # Procesar chunks en paralelo
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(process_chunk, chunk): i 
+                      for i, chunk in enumerate(chunks)}
+            
+            for future in futures:
+                chunk_success, chunk_failed = future.result()
+                successful += chunk_success
+                failed += chunk_failed
+                processed += chunk_success + chunk_failed
+                
+                if progress_callback:
+                    progress_callback(processed, total_rows)
+        
+        duration = time.time() - start_time
+        
+        result = {
+            "total_points": total_rows,
+            "successful": successful,
+            "failed": failed,
+            "duration": duration,
+            "points_per_second": successful / duration if duration > 0 else 0
+        }
+        
+        if self._logger:
+            self._logger.info(f"Escritura paralela completada: {result}")
+        
+        return result
+
+    def downsample_data(
+        self,
+        measurement: str,
+        target_measurement: str,
+        aggregation_window: str,
+        aggregation_func: str = "MEAN",
+        fields: Optional[List[str]] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        database: Optional[str] = None,
+    ) -> int:
+        """
+        Crea una version downsampled de los datos.
+        
+        Args:
+            measurement: Measurement de origen
+            target_measurement: Measurement de destino
+            aggregation_window: Ventana de agregacion (ej: '1h', '1d')
+            aggregation_func: Funcion de agregacion (MEAN, SUM, MAX, MIN, COUNT)
+            fields: Campos a agregar (None = todos)
+            start_time: Tiempo de inicio (formato RFC3339)
+            end_time: Tiempo de fin (formato RFC3339)
+            database: Base de datos (None = usa la actual)
+            
+        Returns:
+            Numero de puntos creados
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError("Debe proporcionar una base de datos")
+        
+        self.switch_database(db_to_use)
+        
+        # Construir query
+        field_list = ", ".join([f"{aggregation_func}({f}) AS {f}" for f in fields]) if fields else f"{aggregation_func}(*)"
+        
+        query = f"""
+            SELECT {field_list}
+            INTO "{target_measurement}"
+            FROM "{measurement}"
+        """
+        
+        where_clauses = []
+        if start_time:
+            where_clauses.append(f"time >= '{start_time}'")
+        if end_time:
+            where_clauses.append(f"time <= '{end_time}'")
+        
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+        
+        query += f" GROUP BY time({aggregation_window}), *"
+        
+        result = self._client.query(query)
+        
+        # Contar puntos creados
+        count_query = f'SELECT COUNT(*) FROM "{target_measurement}"'
+        count_result = self._client.query(count_query)
+        points_created = list(count_result.get_points())[0]['count'] if count_result else 0
+        
+        if self._logger:
+            self._logger.info(f"Downsampling completado: {points_created} puntos creados")
+        
+        return points_created
+
+    def create_continuous_query(
+        self,
+        cq_name: str,
+        measurement: str,
+        target_measurement: str,
+        aggregation_window: str,
+        aggregation_func: str = "MEAN",
+        fields: Optional[List[str]] = None,
+        database: Optional[str] = None,
+    ) -> None:
+        """
+        Crea una continuous query para downsampling automatico.
+        
+        Args:
+            cq_name: Nombre de la continuous query
+            measurement: Measurement de origen
+            target_measurement: Measurement de destino
+            aggregation_window: Ventana de agregacion
+            aggregation_func: Funcion de agregacion
+            fields: Campos a agregar
+            database: Base de datos
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError("Debe proporcionar una base de datos")
+        
+        field_list = ", ".join([f"{aggregation_func}({f}) AS {f}" for f in fields]) if fields else f"{aggregation_func}(*)"
+        
+        query = f"""
+            CREATE CONTINUOUS QUERY "{cq_name}" ON "{db_to_use}"
+            BEGIN
+                SELECT {field_list}
+                INTO "{target_measurement}"
+                FROM "{measurement}"
+                GROUP BY time({aggregation_window}), *
+            END
+        """
+        
+        self._client.query(query)
+        
+        if self._logger:
+            self._logger.info(f"Continuous query '{cq_name}' creada exitosamente")
+
+    def list_continuous_queries(self, database: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Lista todas las continuous queries.
+        
+        Returns:
+            Lista de diccionarios con informacion de las CQs
+        """
+        db_to_use = database or self._database
+        result = self._client.query("SHOW CONTINUOUS QUERIES")
+        
+        cqs = []
+        for point in result.get_points():
+            if not db_to_use or point.get('database') == db_to_use:
+                cqs.append(dict(point))
+        
+        return cqs
+
+    def drop_continuous_query(self, cq_name: str, database: Optional[str] = None) -> None:
+        """
+        Elimina una continuous query.
+        
+        Args:
+            cq_name: Nombre de la CQ a eliminar
+            database: Base de datos
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError("Debe proporcionar una base de datos")
+        
+        query = f'DROP CONTINUOUS QUERY "{cq_name}" ON "{db_to_use}"'
+        self._client.query(query)
+        
+        if self._logger:
+            self._logger.info(f"Continuous query '{cq_name}' eliminada")
+
+    def backup_measurement(
+        self,
+        measurement: str,
+        output_file: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        database: Optional[str] = None,
+    ) -> int:
+        """
+        Exporta un measurement a archivo CSV.
+        
+        Args:
+            measurement: Nombre del measurement
+            output_file: Ruta del archivo CSV de salida
+            start_time: Tiempo de inicio (opcional)
+            end_time: Tiempo de fin (opcional)
+            database: Base de datos (None = usa la actual)
+            
+        Returns:
+            Numero de puntos exportados
+        """
+        df = self.query_to_dataframe(
+            measurement=measurement,
+            start_time=start_time,
+            end_time=end_time,
+            database=database
+        )
+        
+        if df.empty:
+            if self._logger:
+                self._logger.warning(f"No hay datos para exportar del measurement '{measurement}'")
+            return 0
+        
+        df.to_csv(output_file, index=True)
+        
+        if self._logger:
+            self._logger.info(f"Backup completado: {len(df)} puntos exportados a '{output_file}'")
+        
+        return len(df)
+
+    def restore_measurement(
+        self,
+        measurement: str,
+        input_file: str,
+        tags: Optional[Dict[str, str]] = None,
+        batch_size: int = 5000,
+        database: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Restaura un measurement desde archivo CSV.
+        
+        Args:
+            measurement: Nombre del measurement de destino
+            input_file: Ruta del archivo CSV
+            tags: Tags adicionales
+            batch_size: Tamaño de batch para escritura
+            database: Base de datos de destino
+            
+        Returns:
+            Estadisticas de la operacion
+        """
+        df = pd.read_csv(input_file, index_col=0, parse_dates=True)
+        
+        if df.empty:
+            return {"total_points": 0, "successful": 0, "failed": 0}
+        
+        result = self.write_dataframe(
+            df=df,
+            measurement=measurement,
+            tags=tags,
+            batch_size=batch_size,
+            database=database
+        )
+        
+        if self._logger:
+            self._logger.info(f"Restauracion completada: {result}")
+        
+        return result
+
+    def calculate_data_quality_metrics(
+        self,
+        measurement: str,
+        fields: Optional[List[str]] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        database: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Calcula metricas de calidad de datos para un measurement.
+        
+        Args:
+            measurement: Nombre del measurement
+            fields: Campos a analizar (None = todos)
+            start_time: Tiempo de inicio
+            end_time: Tiempo de fin
+            database: Base de datos
+            
+        Returns:
+            Diccionario con metricas por campo
+        """
+        df = self.query_to_dataframe(
+            measurement=measurement,
+            fields=fields,
+            start_time=start_time,
+            end_time=end_time,
+            database=database
+        )
+        
+        if df.empty:
+            return {}
+        
+        metrics = {}
+        for col in df.columns:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                metrics[col] = {
+                    "count": int(df[col].count()),
+                    "missing": int(df[col].isna().sum()),
+                    "missing_percentage": float(df[col].isna().sum() / len(df) * 100),
+                    "mean": float(df[col].mean()) if df[col].count() > 0 else None,
+                    "std": float(df[col].std()) if df[col].count() > 1 else None,
+                    "min": float(df[col].min()) if df[col].count() > 0 else None,
+                    "max": float(df[col].max()) if df[col].count() > 0 else None,
+                    "zeros": int((df[col] == 0).sum()),
+                    "outliers": int(self._count_outliers(df[col])),
+                }
+            else:
+                metrics[col] = {
+                    "count": int(df[col].count()),
+                    "missing": int(df[col].isna().sum()),
+                    "missing_percentage": float(df[col].isna().sum() / len(df) * 100),
+                    "unique_values": int(df[col].nunique()),
+                }
+        
+        return metrics
+
+    @staticmethod
+    def _count_outliers(series: pd.Series, threshold: float = 3.0) -> int:
+        """
+        Cuenta outliers usando el metodo de desviacion estandar.
+        
+        Args:
+            series: Serie de pandas
+            threshold: Numero de desviaciones estandar para considerar outlier
+            
+        Returns:
+            Numero de outliers
+        """
+        if series.count() < 2:
+            return 0
+        
+        mean = series.mean()
+        std = series.std()
+        
+        if std == 0:
+            return 0
+        
+        z_scores = np.abs((series - mean) / std)
+        return int((z_scores > threshold).sum())
+
+    def query_builder(
+        self,
+        measurement: str,
+        fields: Optional[List[str]] = None,
+        where_conditions: Optional[Dict[str, Any]] = None,
+        group_by: Optional[List[str]] = None,
+        order_by: str = "time DESC",
+        limit: Optional[int] = None,
+        database: Optional[str] = None,
+    ) -> str:
+        """
+        Constructor de queries InfluxQL avanzado.
+        
+        Args:
+            measurement: Nombre del measurement
+            fields: Campos a seleccionar (None = todos)
+            where_conditions: Condiciones WHERE como diccionario
+            group_by: Campos para agrupar
+            order_by: Orden de resultados
+            limit: Limite de resultados
+            database: Base de datos
+            
+        Returns:
+            Query InfluxQL como string
+        """
+        # SELECT
+        field_str = ", ".join(fields) if fields else "*"
+        query = f'SELECT {field_str} FROM "{measurement}"'
+        
+        # WHERE
+        if where_conditions:
+            where_clauses = []
+            for key, value in where_conditions.items():
+                if isinstance(value, str):
+                    where_clauses.append(f'"{key}" = \'{value}\'')
+                elif isinstance(value, (list, tuple)):
+                    # Para operadores como IN, >, <, etc
+                    operator, val = value
+                    if isinstance(val, str):
+                        where_clauses.append(f'"{key}" {operator} \'{val}\'')
+                    else:
+                        where_clauses.append(f'"{key}" {operator} {val}')
+                else:
+                    where_clauses.append(f'"{key}" = {value}')
+            
+            if where_clauses:
+                query += " WHERE " + " AND ".join(where_clauses)
+        
+        # GROUP BY
+        if group_by:
+            query += " GROUP BY " + ", ".join(group_by)
+        
+        # ORDER BY
+        if order_by:
+            query += f" ORDER BY {order_by}"
+        
+        # LIMIT
+        if limit:
+            query += f" LIMIT {limit}"
+        
+        return query
+
+    def execute_query_builder(
+        self,
+        measurement: str,
+        fields: Optional[List[str]] = None,
+        where_conditions: Optional[Dict[str, Any]] = None,
+        group_by: Optional[List[str]] = None,
+        order_by: str = "time DESC",
+        limit: Optional[int] = None,
+        as_dataframe: bool = True,
+        database: Optional[str] = None,
+    ) -> Union[pd.DataFrame, Any]:
+        """
+        Construye y ejecuta una query.
+        
+        Args:
+            measurement: Nombre del measurement
+            fields: Campos a seleccionar
+            where_conditions: Condiciones WHERE
+            group_by: Campos para agrupar
+            order_by: Orden de resultados
+            limit: Limite de resultados
+            as_dataframe: Si retornar como DataFrame
+            database: Base de datos
+            
+        Returns:
+            DataFrame o resultado de query
+        """
+        query = self.query_builder(
+            measurement=measurement,
+            fields=fields,
+            where_conditions=where_conditions,
+            group_by=group_by,
+            order_by=order_by,
+            limit=limit,
+            database=database
+        )
+        
+        if as_dataframe:
+            db_to_use = database or self._database
+            if db_to_use:
+                self.switch_database(db_to_use)
+            
+            result = self._client.query(query)
+            if result:
+                df = pd.DataFrame(list(result.get_points()))
+                if not df.empty and 'time' in df.columns:
+                    df['time'] = pd.to_datetime(df['time'])
+                    df.set_index('time', inplace=True)
+                return df
+            return pd.DataFrame()
+        else:
+            return self._client.query(query)
 
     def delete(
         self,
@@ -486,11 +1160,11 @@ class InfluxdbOperation:
         where_clauses = []
 
         if start_time:
-            start_time_utc = DateUtils.convert_datetime(start_time, to_utc=True, output_format='iso8601')
+            start_time_utc = self._convert_to_utc_iso(start_time)
             where_clauses.append(f"time >= '{start_time_utc}'")
 
         if end_time:
-            end_time_utc = DateUtils.convert_datetime(end_time, to_utc=True, output_format='iso8601')
+            end_time_utc = self._convert_to_utc_iso(end_time)
             where_clauses.append(f"time <= '{end_time_utc}'")
 
         if filters:
