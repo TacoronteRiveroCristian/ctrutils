@@ -1,11 +1,43 @@
-
 # ctrutils
 
-**ctrutils** es una librería de utilidades en Python creada para simplificar y automatizar tareas comunes en ciencia de datos y desarrollo. Este proyecto está en desarrollo y puede estar sujeto a cambios.
+**ctrutils** es una librería minimalista de utilidades en Python enfocada en operaciones con InfluxDB y programación de tareas.
 
-## 📄 Documentación
+## 📦 Módulos
 
-Para saber más sobre el uso de la librería **ctrutils**, visite la documentación en [readthedocs](https://ctrutils.readthedocs.io/es/latest/index.html#).
+### 🗄️ InfluxDB Operations
+Operaciones avanzadas con InfluxDB incluyendo:
+- Validación automática de datos (NaN, infinitos, None)
+- Escritura por lotes para DataFrames grandes
+- Métodos administrativos (listar BD, mediciones, campos, tags)
+- Estadísticas detalladas de escritura
+
+### ⏰ Scheduler
+Programación y gestión de tareas automatizadas con APScheduler.
+
+## � Instalación
+
+```bash
+pip install ctrutils
+```
+
+## 💡 Uso Rápido
+
+```python
+from ctrutils import InfluxdbOperation, Scheduler
+
+# InfluxDB
+influx = InfluxdbOperation(host='localhost', port=8086)
+stats = influx.write_dataframe(
+    measurement='datos',
+    data=df,
+    validate_data=True  # Limpia NaN automáticamente
+)
+
+# Scheduler
+scheduler = Scheduler()
+scheduler.add_job(func=mi_funcion, trigger='interval', hours=1)
+scheduler.start()
+```
 
 ## 🤝 Contribuciones
 
@@ -13,7 +45,7 @@ Para saber más sobre el uso de la librería **ctrutils**, visite la documentaci
 
 ## 📬 Contacto
 
-Si tienes alguna pregunta o sugerencia, no dudes en contactarnos a traves de [GitHub](https://github.com/ctrutils/ctrutils/issues) o mediante el correo electrónico [tacoronteriverocristian@gmail.com](mailto:tacoronteriverocristian@gmail.com).
+Si tienes alguna pregunta o sugerencia, contacta a través de [GitHub](https://github.com/TacoronteRiveroCristian/ctrutils/issues) o mediante el correo electrónico [tacoronteriverocristian@gmail.com](mailto:tacoronteriverocristian@gmail.com).
 
 ## 📜 Licencia
 
