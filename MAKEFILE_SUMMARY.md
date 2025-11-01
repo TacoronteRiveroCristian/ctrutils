@@ -233,15 +233,15 @@ make status
 
 # Output:
 # Estado del proyecto ctrutils:
-# 
+#
 # Versión: 11.0.0
 # Python: Python 3.10.12
 # Poetry: Poetry 2.1.4
-# 
+#
 # Tests disponibles:
 #   Unit tests:        2 archivos
 #   Integration tests: 1 archivos
-# 
+#
 # Estado de servicios:
 #   ✅ InfluxDB corriendo en localhost:8086
 ```

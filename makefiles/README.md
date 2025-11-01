@@ -282,5 +282,5 @@ Al añadir nuevos comandos:
 
 ---
 
-**Última actualización**: Noviembre 2025  
+**Última actualización**: Noviembre 2025
 **Versión**: 1.0.0
