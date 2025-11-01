@@ -12,12 +12,12 @@ class TestSchedulerInit(unittest.TestCase):
     def test_init_default(self):
         """Test inicializacion con valores por defecto."""
         scheduler = Scheduler()
-        self.assertIsNotNone(scheduler._scheduler)
+        self.assertIsNotNone(scheduler.scheduler)
 
     def test_init_with_timezone(self):
         """Test inicializacion con timezone."""
         scheduler = Scheduler(timezone='America/New_York')
-        self.assertIsNotNone(scheduler._scheduler)
+        self.assertIsNotNone(scheduler.scheduler)
 
 
 class TestSchedulerJobManagement(unittest.TestCase):
@@ -29,59 +29,64 @@ class TestSchedulerJobManagement(unittest.TestCase):
 
     def tearDown(self):
         """Limpieza despues de cada test."""
-        if self.scheduler and self.scheduler._scheduler.running:
-            self.scheduler.stop()
+        if self.scheduler and self.scheduler.scheduler.running:
+            self.scheduler.shutdown()
 
     def test_add_job_interval(self):
         """Test añadir job con intervalo."""
         mock_func = Mock()
 
-        job_id = self.scheduler.add_job(
+        self.scheduler.add_job(
             func=mock_func,
             trigger='interval',
-            seconds=1,
-            job_id='test_job'
+            job_id='test_job',
+            trigger_args={'seconds': 1}
         )
 
-        self.assertEqual(job_id, 'test_job')
+        jobs = self.scheduler.get_jobs()
+        job_ids = [job.id for job in jobs]
+        self.assertIn('test_job', job_ids)
 
     def test_add_job_cron(self):
         """Test añadir job con cron."""
         mock_func = Mock()
 
-        job_id = self.scheduler.add_job(
+        self.scheduler.add_job(
             func=mock_func,
             trigger='cron',
-            hour=12,
-            minute=0,
-            job_id='cron_job'
+            job_id='cron_job',
+            trigger_args={'hour': 12, 'minute': 0}
         )
 
-        self.assertEqual(job_id, 'cron_job')
+        jobs = self.scheduler.get_jobs()
+        job_ids = [job.id for job in jobs]
+        self.assertIn('cron_job', job_ids)
 
     def test_add_job_date(self):
         """Test añadir job con fecha especifica."""
         mock_func = Mock()
         run_date = datetime.now() + timedelta(hours=1)
 
-        job_id = self.scheduler.add_job(
+        self.scheduler.add_job(
             func=mock_func,
             trigger='date',
-            run_date=run_date,
-            job_id='date_job'
+            job_id='date_job',
+            trigger_args={'run_date': run_date}
         )
 
-        self.assertEqual(job_id, 'date_job')
+        jobs = self.scheduler.get_jobs()
+        job_ids = [job.id for job in jobs]
+        self.assertIn('date_job', job_ids)
 
     def test_remove_job(self):
         """Test eliminar job."""
         mock_func = Mock()
 
-        job_id = self.scheduler.add_job(
+        self.scheduler.add_job(
             func=mock_func,
             trigger='interval',
-            seconds=60,
-            job_id='removable_job'
+            job_id='removable_job',
+            trigger_args={'seconds': 60}
         )
 
         # Eliminar
@@ -97,8 +102,12 @@ class TestSchedulerJobManagement(unittest.TestCase):
         mock_func = Mock()
 
         # Añadir varios jobs
-        self.scheduler.add_job(mock_func, 'interval', seconds=60, job_id='job1')
-        self.scheduler.add_job(mock_func, 'interval', seconds=120, job_id='job2')
+        self.scheduler.add_job(
+            mock_func, 'interval', 'job1', {'seconds': 60}
+        )
+        self.scheduler.add_job(
+            mock_func, 'interval', 'job2', {'seconds': 120}
+        )
 
         jobs = self.scheduler.get_jobs()
         self.assertGreaterEqual(len(jobs), 2)
@@ -106,15 +115,17 @@ class TestSchedulerJobManagement(unittest.TestCase):
     def test_start_stop(self):
         """Test iniciar y detener scheduler."""
         mock_func = Mock()
-        self.scheduler.add_job(mock_func, 'interval', seconds=60)
+        self.scheduler.add_job(
+            mock_func, 'interval', 'test_start_stop', {'seconds': 60}
+        )
 
         # Iniciar
         self.scheduler.start()
-        self.assertTrue(self.scheduler._scheduler.running)
+        self.assertTrue(self.scheduler.scheduler.running)
 
         # Detener
-        self.scheduler.stop()
-        self.assertFalse(self.scheduler._scheduler.running)
+        self.scheduler.shutdown()
+        self.assertFalse(self.scheduler.scheduler.running)
 
 
 if __name__ == '__main__':

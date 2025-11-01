@@ -12,7 +12,11 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from ctrutils.handler.logging.logging_handler import LoggingHandler
+try:
+    from ctrutils.handler.logging.logging_handler import LoggingHandler
+    HAS_LOGGING_HANDLER = True
+except ImportError:
+    HAS_LOGGING_HANDLER = False
 
 
 class Scheduler:
@@ -35,13 +39,23 @@ class Scheduler:
         """
         if logger:
             self.logger = logger
-        else:
+        elif HAS_LOGGING_HANDLER:
             log_handler = LoggingHandler(
                 level=logging.INFO,
                 logger_name="ctrutils.scheduler",
                 message_format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             )
             self.logger = log_handler.add_handlers([log_handler.create_stream_handler()])
+        else:
+            # Fallback a logging estándar si LoggingHandler no está disponible
+            self.logger = logging.getLogger("ctrutils.scheduler")
+            self.logger.setLevel(logging.INFO)
+            if not self.logger.handlers:
+                handler = logging.StreamHandler()
+                handler.setFormatter(
+                    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+                )
+                self.logger.addHandler(handler)
 
         self.scheduler = BackgroundScheduler(
             timezone=timezone, **scheduler_options
@@ -103,6 +117,14 @@ class Scheduler:
         """
         self.scheduler.remove_job(job_id)
         self.logger.info(f"Job '{job_id}' removed.")
+
+    def get_jobs(self) -> list:
+        """
+        Obtiene la lista de trabajos programados.
+
+        :return: Lista de jobs del scheduler.
+        """
+        return self.scheduler.get_jobs()
 
     def start(self) -> None:
         """Inicia el scheduler en segundo plano."""
