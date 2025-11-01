@@ -159,10 +159,10 @@ class TestNewFeature(unittest.TestCase):
     def test_my_feature(self, mock_client):
         # Arrange
         op = InfluxdbOperation(host='localhost', port=8086)
-        
+
         # Act
         result = op.some_method()
-        
+
         # Assert
         self.assertEqual(result, expected_value)
 ```
@@ -178,7 +178,7 @@ class TestNewIntegration(unittest.TestCase):
     def setUp(self):
         config = get_test_config()
         self.op = InfluxdbOperation(**config)
-    
+
     def test_real_operation(self):
         # Test con InfluxDB real
         result = self.op.some_operation()

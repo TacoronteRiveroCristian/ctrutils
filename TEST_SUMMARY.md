@@ -217,7 +217,7 @@ make test-coverage   # Tests + coverage
 - **Tests Totales**: 53 tests
   - Unitarios: 41 tests
   - Integración: 12 tests
-  
+
 - **Coverage Target**: >80% para código crítico
 
 - **Tiempo de Ejecución**:

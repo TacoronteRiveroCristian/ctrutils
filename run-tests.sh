@@ -70,10 +70,10 @@ clean() {
 # Funcion para verificar InfluxDB
 check_influxdb() {
     print_yellow "🔍 Verificando conexion a InfluxDB..."
-    
+
     HOST=${INFLUXDB_TEST_HOST:-localhost}
     PORT=${INFLUXDB_TEST_PORT:-8086}
-    
+
     if curl -s "http://${HOST}:${PORT}/ping" > /dev/null 2>&1; then
         print_green "✅ InfluxDB disponible en ${HOST}:${PORT}"
         return 0
@@ -101,28 +101,28 @@ case $COMMAND in
         print_yellow "🧪 Ejecutando tests unitarios..."
         pytest tests/unit/ -v --tb=short
         ;;
-    
+
     integration)
         check_influxdb || exit 1
         print_yellow "🧪 Ejecutando tests de integracion..."
         pytest tests/integration/ -v --tb=short
         ;;
-    
+
     all)
         print_yellow "🧪 Ejecutando todos los tests..."
         pytest tests/ -v --tb=short
         ;;
-    
+
     coverage)
         print_yellow "🧪 Ejecutando tests con coverage..."
         pytest tests/ -v --cov=ctrutils --cov-report=term-missing --cov-report=xml
         ;;
-    
+
     html)
         print_yellow "🧪 Generando reporte HTML de coverage..."
         pytest tests/ -v --cov=ctrutils --cov-report=html --cov-report=term
         print_green "✅ Reporte generado en: htmlcov/index.html"
-        
+
         # Intentar abrir el reporte
         if command -v xdg-open &> /dev/null; then
             xdg-open htmlcov/index.html 2>/dev/null
@@ -130,7 +130,7 @@ case $COMMAND in
             open htmlcov/index.html
         fi
         ;;
-    
+
     watch)
         if ! command -v pytest-watch &> /dev/null; then
             print_red "❌ pytest-watch no esta instalado"
@@ -140,15 +140,15 @@ case $COMMAND in
         print_yellow "👀 Ejecutando tests en modo watch..."
         ptw tests/unit/ -- -v
         ;;
-    
+
     clean)
         clean
         ;;
-    
+
     help)
         show_usage
         ;;
-    
+
     *)
         print_red "❌ Opcion no reconocida: $COMMAND"
         echo ""

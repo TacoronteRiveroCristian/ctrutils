@@ -48,10 +48,10 @@ git checkout -b fix/mi-bug-fix
 def test_mi_nueva_funcionalidad():
     # Arrange
     op = InfluxdbOperation(host='localhost', port=8086)
-    
+
     # Act
     resultado = op.mi_nueva_funcionalidad()
-    
+
     # Assert
     assert resultado == esperado
 ```
@@ -63,13 +63,13 @@ def test_mi_nueva_funcionalidad():
 def mi_nueva_funcionalidad(self):
     """
     Descripción clara de lo que hace.
-    
+
     Args:
         parametro1: Descripción
-        
+
     Returns:
         Descripción del retorno
-        
+
     Raises:
         ValueError: Cuando...
     """
@@ -139,21 +139,21 @@ def process_dataframe(
 ) -> Dict[str, Any]:
     """
     Procesa un DataFrame y lo escribe a InfluxDB.
-    
+
     Args:
         df: DataFrame con datos a procesar
         measurement: Nombre de la medición
         tags: Tags opcionales para los puntos
-        
+
     Returns:
         Diccionario con estadísticas de la operación:
         - successful: Puntos escritos exitosamente
         - failed: Puntos que fallaron
         - duration: Tiempo de ejecución en segundos
-        
+
     Raises:
         ValueError: Si el DataFrame está vacío
-        
+
     Example:
         >>> df = pd.DataFrame({'temp': [25.5, 26.0]})
         >>> stats = process_dataframe(df, 'temperature')
@@ -162,7 +162,7 @@ def process_dataframe(
     """
     if df.empty:
         raise ValueError("DataFrame no puede estar vacío")
-    
+
     # Implementación
     return {"successful": 0, "failed": 0, "duration": 0.0}
 ```
@@ -194,7 +194,7 @@ class TestMyIntegration(unittest.TestCase):
     def setUp(self):
         self.op = InfluxdbOperation(**get_test_config())
         # Setup
-    
+
     def tearDown(self):
         # Cleanup
         pass

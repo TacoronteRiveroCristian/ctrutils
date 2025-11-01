@@ -36,14 +36,14 @@ SKIP_MSG = "Requiere InfluxDB. Configurar INFLUXDB_TEST_HOST o instalar InfluxDB
 @unittest.skipIf(SKIP_INTEGRATION, SKIP_MSG)
 class TestInfluxdbOperationIntegration(unittest.TestCase):
     """Tests de integracion con InfluxDB real."""
-    
+
     @classmethod
     def setUpClass(cls):
         """Setup una vez para toda la clase."""
         cls.config = get_test_config()
         cls.test_database = cls.config['database']
         cls.test_measurement = 'test_measurement'
-    
+
     def setUp(self):
         """Setup para cada test."""
         try:
@@ -53,14 +53,14 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
                 username=self.config['username'],
                 password=self.config['password'],
             )
-            
+
             # Crear base de datos de test
             self.op.create_database(self.test_database)
             self.op.switch_database(self.test_database)
-            
+
         except Exception as e:
             self.skipTest(f"No se pudo conectar a InfluxDB: {e}")
-    
+
     def tearDown(self):
         """Limpieza despues de cada test."""
         try:
@@ -71,7 +71,7 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
                     self.op.delete(measurement)
         except:
             pass
-    
+
     @classmethod
     def tearDownClass(cls):
         """Limpieza final."""
@@ -86,7 +86,7 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
             op.drop_database(cls.test_database)
         except:
             pass
-    
+
     def test_write_and_read_points(self):
         """Test escribir y leer puntos."""
         points = [
@@ -103,57 +103,57 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
                 "tags": {"location": "room_1"},
             },
         ]
-        
+
         # Escribir
         stats = self.op.write_points(points)
         self.assertEqual(stats['successful'], 2)
         self.assertEqual(stats['failed'], 0)
-        
+
         # Leer
         df = self.op.query_to_dataframe(
             measurement=self.test_measurement,
             start_time='2024-01-01T00:00:00Z',
             end_time='2024-01-01T00:02:00Z'
         )
-        
+
         self.assertFalse(df.empty)
         self.assertGreaterEqual(len(df), 2)
-    
+
     def test_write_dataframe(self):
         """Test escribir DataFrame."""
         df = create_sample_dataframe(rows=50, with_nans=True)
-        
+
         stats = self.op.write_dataframe(
             df=df,
             measurement=self.test_measurement,
             tags={'sensor': 'DHT22'},
             validate_data=True
         )
-        
+
         self.assertGreater(stats['successful'], 0)
-        
+
         # Verificar que se escribio
         measurements = self.op.get_measurements()
         self.assertIn(self.test_measurement, measurements)
-    
+
     def test_create_and_list_databases(self):
         """Test crear y listar bases de datos."""
         test_db_name = 'temp_test_db'
-        
+
         # Crear
         self.op.create_database(test_db_name)
-        
+
         # Listar
         databases = self.op.get_databases()
         self.assertIn(test_db_name, databases)
-        
+
         # Limpiar
         self.op.drop_database(test_db_name)
-    
+
     def test_retention_policy(self):
         """Test crear y listar retention policies."""
         rp_name = 'test_rp'
-        
+
         # Crear
         self.op.create_retention_policy(
             name=rp_name,
@@ -161,24 +161,24 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
             replication=1,
             database=self.test_database
         )
-        
+
         # Listar
         policies = self.op.get_retention_policies(self.test_database)
         policy_names = [p['name'] for p in policies]
         self.assertIn(rp_name, policy_names)
-        
+
         # Limpiar
         self.op.drop_retention_policy(rp_name, self.test_database)
-    
+
     def test_continuous_query(self):
         """Test crear y listar continuous queries."""
         # Primero escribir algunos datos
         df = create_sample_dataframe(rows=100)
         self.op.write_dataframe(df, measurement=self.test_measurement)
-        
+
         cq_name = 'test_cq'
         target_measurement = 'downsampled_data'
-        
+
         # Crear CQ
         self.op.create_continuous_query(
             cq_name=cq_name,
@@ -188,72 +188,72 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
             aggregation_func='MEAN',
             database=self.test_database
         )
-        
+
         # Listar
         cqs = self.op.list_continuous_queries(self.test_database)
         cq_names = [cq.get('name') for cq in cqs if cq.get('name')]
         self.assertIn(cq_name, cq_names)
-        
+
         # Limpiar
         self.op.drop_continuous_query(cq_name, self.test_database)
-    
+
     def test_backup_and_restore(self):
         """Test backup y restore de measurement."""
         import tempfile
-        
+
         # Escribir datos originales
         df_original = create_sample_dataframe(rows=50)
         self.op.write_dataframe(df_original, measurement=self.test_measurement)
-        
+
         # Backup
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
             backup_file = f.name
-        
+
         try:
             points_exported = self.op.backup_measurement(
                 measurement=self.test_measurement,
                 output_file=backup_file
             )
             self.assertGreater(points_exported, 0)
-            
+
             # Eliminar datos originales
             self.op.delete(self.test_measurement)
-            
+
             # Restore
             stats = self.op.restore_measurement(
                 measurement=self.test_measurement,
                 input_file=backup_file
             )
             self.assertGreater(stats['successful'], 0)
-            
+
             # Verificar
             df_restored = self.op.query_to_dataframe(measurement=self.test_measurement)
             self.assertFalse(df_restored.empty)
-            
+
         finally:
             if os.path.exists(backup_file):
                 os.remove(backup_file)
-    
+
     def test_data_quality_metrics(self):
         """Test calcular metricas de calidad de datos."""
         # Crear datos con caracteristicas conocidas
         df = create_sample_dataframe(rows=100, with_nans=True)
         self.op.write_dataframe(df, measurement=self.test_measurement)
-        
+
         # Calcular metricas
         metrics = self.op.calculate_data_quality_metrics(
             measurement=self.test_measurement
         )
-        
+
         self.assertIsInstance(metrics, dict)
         self.assertGreater(len(metrics), 0)
-        
+
         # Verificar estructura de metricas
         for field, field_metrics in metrics.items():
             self.assertIn('count', field_metrics)
             self.assertIn('missing', field_metrics)
             self.assertIn('missing_percentage', field_metrics)
-    
+
     def test_downsampling(self):
         """Test downsampling de datos."""
         # Crear datos con alta frecuencia
@@ -261,9 +261,9 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
         df = pd.DataFrame({
             'value': np.random.uniform(20, 30, 1000),
         }, index=timestamps)
-        
+
         self.op.write_dataframe(df, measurement=self.test_measurement)
-        
+
         # Downsample
         target_measurement = 'downsampled_test'
         points_created = self.op.downsample_data(
@@ -274,13 +274,13 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
             start_time='2024-01-01T00:00:00Z',
             end_time='2024-01-02T00:00:00Z'
         )
-        
+
         self.assertGreater(points_created, 0)
-        
+
         # Verificar que el measurement downsampled existe
         measurements = self.op.get_measurements()
         self.assertIn(target_measurement, measurements)
-    
+
     def test_field_keys_grouped_by_type(self):
         """Test obtener fields agrupados por tipo."""
         # Escribir datos con diferentes tipos
@@ -288,12 +288,12 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
             'temperature': [25.5, 26.0, 25.8],
             'humidity': [60, 65, 62],
         }, index=pd.date_range(start='2024-01-01', periods=3, freq='1min'))
-        
+
         self.op.write_dataframe(df, measurement=self.test_measurement)
-        
+
         # Obtener fields por tipo
         fields_by_type = self.op.get_field_keys_grouped_by_type(self.test_measurement)
-        
+
         self.assertIsInstance(fields_by_type, dict)
         self.assertGreater(len(fields_by_type), 0)
 
@@ -301,13 +301,13 @@ class TestInfluxdbOperationIntegration(unittest.TestCase):
 @unittest.skipIf(SKIP_INTEGRATION, SKIP_MSG)
 class TestInfluxdbOperationPerformance(unittest.TestCase):
     """Tests de performance con datos grandes."""
-    
+
     @classmethod
     def setUpClass(cls):
         """Setup una vez para toda la clase."""
         cls.config = get_test_config()
         cls.test_database = cls.config['database'] + '_perf'
-    
+
     def setUp(self):
         """Setup para cada test."""
         try:
@@ -320,10 +320,10 @@ class TestInfluxdbOperationPerformance(unittest.TestCase):
             self.op.create_database(self.test_database)
             self.op.switch_database(self.test_database)
             self.op.enable_logging()
-            
+
         except Exception as e:
             self.skipTest(f"No se pudo conectar a InfluxDB: {e}")
-    
+
     def tearDown(self):
         """Limpieza."""
         try:
@@ -331,7 +331,7 @@ class TestInfluxdbOperationPerformance(unittest.TestCase):
                 self.op.drop_database(self.test_database)
         except:
             pass
-    
+
     def test_write_large_dataframe(self):
         """Test escribir DataFrame grande."""
         # Crear DataFrame con 10k filas
@@ -340,21 +340,21 @@ class TestInfluxdbOperationPerformance(unittest.TestCase):
             'cpu': np.random.uniform(0, 100, 10000),
             'memory': np.random.uniform(0, 100, 10000),
         }, index=timestamps)
-        
+
         # Escribir
         stats = self.op.write_dataframe(
             df=df,
             measurement='performance_test',
             batch_size=1000
         )
-        
+
         self.assertEqual(stats['successful'], 10000)
         self.assertGreater(stats['points_per_second'], 0)
-        
+
         # Verificar metricas
         metrics = self.op.get_metrics()
         self.assertGreater(metrics['total_points'], 0)
-    
+
     def test_write_dataframe_parallel(self):
         """Test escritura paralela."""
         # Crear DataFrame grande
@@ -363,7 +363,7 @@ class TestInfluxdbOperationPerformance(unittest.TestCase):
             'value1': np.random.uniform(0, 100, 10000),
             'value2': np.random.uniform(0, 100, 10000),
         }, index=timestamps)
-        
+
         # Escribir en paralelo
         stats = self.op.write_dataframe_parallel(
             df=df,
@@ -371,7 +371,7 @@ class TestInfluxdbOperationPerformance(unittest.TestCase):
             batch_size=1000,
             max_workers=4
         )
-        
+
         self.assertGreater(stats['successful'], 0)
         self.assertGreater(stats['points_per_second'], 0)
         print(f"Performance: {stats['points_per_second']:.2f} points/sec")
