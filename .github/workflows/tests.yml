@@ -1,0 +1,156 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop, "feature/*" ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root --with dev,test
+    
+    - name: Install project
+      run: poetry install --no-interaction
+    
+    - name: Run unit tests
+      run: |
+        poetry run pytest tests/unit/ -v --tb=short --cov=ctrutils --cov-report=xml --cov-report=term-missing
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      influxdb:
+        image: influxdb:1.8
+        ports:
+          - 8086:8086
+        env:
+          INFLUXDB_DB: test_db
+          INFLUXDB_ADMIN_USER: admin
+          INFLUXDB_ADMIN_PASSWORD: admin
+        options: >-
+          --health-cmd "influx -execute 'SHOW DATABASES'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-3.10-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root --with dev,test
+    
+    - name: Install project
+      run: poetry install --no-interaction
+    
+    - name: Wait for InfluxDB
+      run: |
+        timeout 30 bash -c 'until curl -s http://localhost:8086/ping; do sleep 1; done'
+    
+    - name: Run integration tests
+      env:
+        INFLUXDB_TEST_HOST: localhost
+        INFLUXDB_TEST_PORT: 8086
+        INFLUXDB_TEST_USER: admin
+        INFLUXDB_TEST_PASSWORD: admin
+        INFLUXDB_TEST_DATABASE: test_db
+      run: |
+        poetry run pytest tests/integration/ -v --tb=short --cov=ctrutils --cov-report=xml --cov-report=term-missing
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: integration
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+    
+    - name: Install dependencies
+      run: poetry install --no-interaction --with dev
+    
+    - name: Run linting
+      run: |
+        poetry run pylint ctrutils --rcfile=.pylintrc || true
+        poetry run flake8 ctrutils --max-line-length=120 --extend-ignore=E203,W503
+    
+    - name: Run type checking
+      run: |
+        poetry run mypy ctrutils --config-file=mypy.ini || true
+    
+    - name: Check formatting
+      run: |
+        poetry run black --check ctrutils
+        poetry run isort --check-only ctrutils

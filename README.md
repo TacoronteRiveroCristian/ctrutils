@@ -39,7 +39,33 @@ scheduler.add_job(func=mi_funcion, trigger='interval', hours=1)
 scheduler.start()
 ```
 
-## 🤝 Contribuciones
+## � Testing
+
+El proyecto incluye una suite completa de tests:
+
+```bash
+# Ejecutar tests unitarios (rápido, sin dependencias)
+pytest tests/unit/ -v
+
+# Ejecutar tests de integración (requiere InfluxDB)
+pytest tests/integration/ -v
+
+# Ejecutar todos los tests con coverage
+pytest --cov=ctrutils --cov-report=html
+
+# Usar el script helper
+./run-tests.sh unit        # Solo unitarios
+./run-tests.sh coverage    # Con coverage
+./run-tests.sh html        # Reporte HTML
+```
+
+Para más información sobre tests, ver [tests/README.md](tests/README.md).
+
+## 📊 Coverage
+
+El proyecto mantiene >80% de cobertura de código. Ver reporte completo en `htmlcov/` después de ejecutar tests.
+
+## �🤝 Contribuciones
 
 ¡Las contribuciones son bienvenidas! Si encuentras algún problema o tienes alguna mejora, no dudes en abrir un issue o enviar un pull request.
 

@@ -24,6 +24,56 @@ black = "^24.10.0"
 pre-commit = "^4.0.1"
 types-python-dateutil = "^2.9.0.20241003"
 
+[tool.poetry.group.test.dependencies]
+pytest = "^8.3.0"
+pytest-cov = "^6.0.0"
+pytest-mock = "^3.14.0"
+pytest-asyncio = "^0.24.0"
+coverage = {extras = ["toml"], version = "^7.6.0"}
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+markers = [
+    "unit: Tests unitarios (sin dependencias externas)",
+    "integration: Tests de integracion (requieren InfluxDB)",
+    "slow: Tests lentos que se pueden saltar",
+]
+
+[tool.coverage.run]
+source = ["ctrutils"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false
+skip_empty = true
+
+[tool.coverage.html]
+directory = "htmlcov"

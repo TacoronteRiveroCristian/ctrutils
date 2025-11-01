@@ -646,7 +646,7 @@ class InfluxdbOperation:
     ) -> Dict[str, Any]:
         """
         Escribe un DataFrame a InfluxDB usando procesamiento paralelo.
-        
+
         Args:
             df: DataFrame con datos a escribir
             measurement: Nombre de la medicion
@@ -657,22 +657,22 @@ class InfluxdbOperation:
             max_workers: Numero maximo de threads para procesamiento paralelo
             progress_callback: Funcion opcional(processed, total) para reportar progreso
             database: Nombre de la base de datos (None = usa la actual)
-            
+
         Returns:
             Diccionario con estadisticas de la operacion
         """
         if df.empty:
             return {"total_points": 0, "successful": 0, "failed": 0, "duration": 0.0}
-        
+
         start_time = time.time()
         total_rows = len(df)
         processed = 0
         successful = 0
         failed = 0
-        
+
         # Dividir DataFrame en chunks
         chunks = [df.iloc[i:i + batch_size] for i in range(0, total_rows, batch_size)]
-        
+
         # Funcion para procesar cada chunk
         def process_chunk(chunk_data):
             try:
@@ -691,23 +691,23 @@ class InfluxdbOperation:
                 if self._logger:
                     self._logger.error(f"Error procesando chunk: {e}")
                 return 0, len(chunk_data)
-        
+
         # Procesar chunks en paralelo
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(process_chunk, chunk): i 
+            futures = {executor.submit(process_chunk, chunk): i
                       for i, chunk in enumerate(chunks)}
-            
+
             for future in futures:
                 chunk_success, chunk_failed = future.result()
                 successful += chunk_success
                 failed += chunk_failed
                 processed += chunk_success + chunk_failed
-                
+
                 if progress_callback:
                     progress_callback(processed, total_rows)
-        
+
         duration = time.time() - start_time
-        
+
         result = {
             "total_points": total_rows,
             "successful": successful,
@@ -715,10 +715,10 @@ class InfluxdbOperation:
             "duration": duration,
             "points_per_second": successful / duration if duration > 0 else 0
         }
-        
+
         if self._logger:
             self._logger.info(f"Escritura paralela completada: {result}")
-        
+
         return result
 
     def downsample_data(
@@ -734,7 +734,7 @@ class InfluxdbOperation:
     ) -> int:
         """
         Crea una version downsampled de los datos.
-        
+
         Args:
             measurement: Measurement de origen
             target_measurement: Measurement de destino
@@ -744,46 +744,46 @@ class InfluxdbOperation:
             start_time: Tiempo de inicio (formato RFC3339)
             end_time: Tiempo de fin (formato RFC3339)
             database: Base de datos (None = usa la actual)
-            
+
         Returns:
             Numero de puntos creados
         """
         db_to_use = database or self._database
         if db_to_use is None:
             raise ValueError("Debe proporcionar una base de datos")
-        
+
         self.switch_database(db_to_use)
-        
+
         # Construir query
         field_list = ", ".join([f"{aggregation_func}({f}) AS {f}" for f in fields]) if fields else f"{aggregation_func}(*)"
-        
+
         query = f"""
             SELECT {field_list}
             INTO "{target_measurement}"
             FROM "{measurement}"
         """
-        
+
         where_clauses = []
         if start_time:
             where_clauses.append(f"time >= '{start_time}'")
         if end_time:
             where_clauses.append(f"time <= '{end_time}'")
-        
+
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
-        
+
         query += f" GROUP BY time({aggregation_window}), *"
-        
+
         result = self._client.query(query)
-        
+
         # Contar puntos creados
         count_query = f'SELECT COUNT(*) FROM "{target_measurement}"'
         count_result = self._client.query(count_query)
         points_created = list(count_result.get_points())[0]['count'] if count_result else 0
-        
+
         if self._logger:
             self._logger.info(f"Downsampling completado: {points_created} puntos creados")
-        
+
         return points_created
 
     def create_continuous_query(
@@ -798,7 +798,7 @@ class InfluxdbOperation:
     ) -> None:
         """
         Crea una continuous query para downsampling automatico.
-        
+
         Args:
             cq_name: Nombre de la continuous query
             measurement: Measurement de origen
@@ -811,9 +811,9 @@ class InfluxdbOperation:
         db_to_use = database or self._database
         if db_to_use is None:
             raise ValueError("Debe proporcionar una base de datos")
-        
+
         field_list = ", ".join([f"{aggregation_func}({f}) AS {f}" for f in fields]) if fields else f"{aggregation_func}(*)"
-        
+
         query = f"""
             CREATE CONTINUOUS QUERY "{cq_name}" ON "{db_to_use}"
             BEGIN
@@ -823,33 +823,33 @@ class InfluxdbOperation:
                 GROUP BY time({aggregation_window}), *
             END
         """
-        
+
         self._client.query(query)
-        
+
         if self._logger:
             self._logger.info(f"Continuous query '{cq_name}' creada exitosamente")
 
     def list_continuous_queries(self, database: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Lista todas las continuous queries.
-        
+
         Returns:
             Lista de diccionarios con informacion de las CQs
         """
         db_to_use = database or self._database
         result = self._client.query("SHOW CONTINUOUS QUERIES")
-        
+
         cqs = []
         for point in result.get_points():
             if not db_to_use or point.get('database') == db_to_use:
                 cqs.append(dict(point))
-        
+
         return cqs
 
     def drop_continuous_query(self, cq_name: str, database: Optional[str] = None) -> None:
         """
         Elimina una continuous query.
-        
+
         Args:
             cq_name: Nombre de la CQ a eliminar
             database: Base de datos
@@ -857,10 +857,10 @@ class InfluxdbOperation:
         db_to_use = database or self._database
         if db_to_use is None:
             raise ValueError("Debe proporcionar una base de datos")
-        
+
         query = f'DROP CONTINUOUS QUERY "{cq_name}" ON "{db_to_use}"'
         self._client.query(query)
-        
+
         if self._logger:
             self._logger.info(f"Continuous query '{cq_name}' eliminada")
 
@@ -874,14 +874,14 @@ class InfluxdbOperation:
     ) -> int:
         """
         Exporta un measurement a archivo CSV.
-        
+
         Args:
             measurement: Nombre del measurement
             output_file: Ruta del archivo CSV de salida
             start_time: Tiempo de inicio (opcional)
             end_time: Tiempo de fin (opcional)
             database: Base de datos (None = usa la actual)
-            
+
         Returns:
             Numero de puntos exportados
         """
@@ -891,17 +891,17 @@ class InfluxdbOperation:
             end_time=end_time,
             database=database
         )
-        
+
         if df.empty:
             if self._logger:
                 self._logger.warning(f"No hay datos para exportar del measurement '{measurement}'")
             return 0
-        
+
         df.to_csv(output_file, index=True)
-        
+
         if self._logger:
             self._logger.info(f"Backup completado: {len(df)} puntos exportados a '{output_file}'")
-        
+
         return len(df)
 
     def restore_measurement(
@@ -914,22 +914,22 @@ class InfluxdbOperation:
     ) -> Dict[str, Any]:
         """
         Restaura un measurement desde archivo CSV.
-        
+
         Args:
             measurement: Nombre del measurement de destino
             input_file: Ruta del archivo CSV
             tags: Tags adicionales
             batch_size: Tamaño de batch para escritura
             database: Base de datos de destino
-            
+
         Returns:
             Estadisticas de la operacion
         """
         df = pd.read_csv(input_file, index_col=0, parse_dates=True)
-        
+
         if df.empty:
             return {"total_points": 0, "successful": 0, "failed": 0}
-        
+
         result = self.write_dataframe(
             df=df,
             measurement=measurement,
@@ -937,10 +937,10 @@ class InfluxdbOperation:
             batch_size=batch_size,
             database=database
         )
-        
+
         if self._logger:
             self._logger.info(f"Restauracion completada: {result}")
-        
+
         return result
 
     def calculate_data_quality_metrics(
@@ -953,14 +953,14 @@ class InfluxdbOperation:
     ) -> Dict[str, Dict[str, Any]]:
         """
         Calcula metricas de calidad de datos para un measurement.
-        
+
         Args:
             measurement: Nombre del measurement
             fields: Campos a analizar (None = todos)
             start_time: Tiempo de inicio
             end_time: Tiempo de fin
             database: Base de datos
-            
+
         Returns:
             Diccionario con metricas por campo
         """
@@ -971,10 +971,10 @@ class InfluxdbOperation:
             end_time=end_time,
             database=database
         )
-        
+
         if df.empty:
             return {}
-        
+
         metrics = {}
         for col in df.columns:
             if pd.api.types.is_numeric_dtype(df[col]):
@@ -996,30 +996,30 @@ class InfluxdbOperation:
                     "missing_percentage": float(df[col].isna().sum() / len(df) * 100),
                     "unique_values": int(df[col].nunique()),
                 }
-        
+
         return metrics
 
     @staticmethod
     def _count_outliers(series: pd.Series, threshold: float = 3.0) -> int:
         """
         Cuenta outliers usando el metodo de desviacion estandar.
-        
+
         Args:
             series: Serie de pandas
             threshold: Numero de desviaciones estandar para considerar outlier
-            
+
         Returns:
             Numero de outliers
         """
         if series.count() < 2:
             return 0
-        
+
         mean = series.mean()
         std = series.std()
-        
+
         if std == 0:
             return 0
-        
+
         z_scores = np.abs((series - mean) / std)
         return int((z_scores > threshold).sum())
 
@@ -1035,7 +1035,7 @@ class InfluxdbOperation:
     ) -> str:
         """
         Constructor de queries InfluxQL avanzado.
-        
+
         Args:
             measurement: Nombre del measurement
             fields: Campos a seleccionar (None = todos)
@@ -1044,14 +1044,14 @@ class InfluxdbOperation:
             order_by: Orden de resultados
             limit: Limite de resultados
             database: Base de datos
-            
+
         Returns:
             Query InfluxQL como string
         """
         # SELECT
         field_str = ", ".join(fields) if fields else "*"
         query = f'SELECT {field_str} FROM "{measurement}"'
-        
+
         # WHERE
         if where_conditions:
             where_clauses = []
@@ -1067,22 +1067,22 @@ class InfluxdbOperation:
                         where_clauses.append(f'"{key}" {operator} {val}')
                 else:
                     where_clauses.append(f'"{key}" = {value}')
-            
+
             if where_clauses:
                 query += " WHERE " + " AND ".join(where_clauses)
-        
+
         # GROUP BY
         if group_by:
             query += " GROUP BY " + ", ".join(group_by)
-        
+
         # ORDER BY
         if order_by:
             query += f" ORDER BY {order_by}"
-        
+
         # LIMIT
         if limit:
             query += f" LIMIT {limit}"
-        
+
         return query
 
     def execute_query_builder(
@@ -1098,7 +1098,7 @@ class InfluxdbOperation:
     ) -> Union[pd.DataFrame, Any]:
         """
         Construye y ejecuta una query.
-        
+
         Args:
             measurement: Nombre del measurement
             fields: Campos a seleccionar
@@ -1108,7 +1108,7 @@ class InfluxdbOperation:
             limit: Limite de resultados
             as_dataframe: Si retornar como DataFrame
             database: Base de datos
-            
+
         Returns:
             DataFrame o resultado de query
         """
@@ -1121,12 +1121,12 @@ class InfluxdbOperation:
             limit=limit,
             database=database
         )
-        
+
         if as_dataframe:
             db_to_use = database or self._database
             if db_to_use:
                 self.switch_database(db_to_use)
-            
+
             result = self._client.query(query)
             if result:
                 df = pd.DataFrame(list(result.get_points()))
