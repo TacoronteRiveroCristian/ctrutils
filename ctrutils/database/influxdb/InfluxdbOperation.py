@@ -142,36 +142,61 @@ class InfluxdbOperation:
 
         return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
-    def _setup_logger(self, name: str = 'InfluxdbOperation', level: int = logging.INFO) -> None:
+    def _setup_logger(
+        self,
+        name: str = 'InfluxdbOperation',
+        level: int = logging.INFO,
+        logger: Optional[logging.Logger] = None
+    ) -> None:
         """
         Configura el logger para la clase.
 
         Args:
             name: Nombre del logger.
             level: Nivel de logging.
+            logger: Logger personalizado (opcional). Si se proporciona, se usa en lugar de crear uno nuevo.
         """
-        self._logger = logging.getLogger(name)
-        self._logger.setLevel(level)
-        if not self._logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
-            handler.setFormatter(formatter)
-            self._logger.addHandler(handler)
+        if logger:
+            self._logger = logger
+        else:
+            self._logger = logging.getLogger(name)
+            self._logger.setLevel(level)
+            if not self._logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter(
+                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                )
+                handler.setFormatter(formatter)
+                self._logger.addHandler(handler)
 
-    def enable_logging(self, level: int = logging.INFO) -> None:
+    def enable_logging(
+        self,
+        level: int = logging.INFO,
+        logger: Optional[logging.Logger] = None
+    ) -> None:
         """
         Activa el logging para debugging y monitoreo.
 
         Args:
             level: Nivel de logging (logging.DEBUG, INFO, WARNING, ERROR).
+            logger: Instancia de logger personalizado (opcional). Si se proporciona,
+                    se usa en lugar de crear uno nuevo.
 
         Ejemplos:
+            >>> # Con logging estándar
             >>> influx = InfluxdbOperation(host='localhost', port=8086)
             >>> influx.enable_logging(logging.DEBUG)
+
+            >>> # Con LoggingHandler de ctrutils
+            >>> from ctrutils.handler import LoggingHandler
+            >>> handler = LoggingHandler()
+            >>> custom_logger = handler.add_handlers([
+            ...     handler.create_stream_handler(),
+            ...     handler.create_file_handler('influxdb.log')
+            ... ])
+            >>> influx.enable_logging(logger=custom_logger)
         """
-        self._setup_logger(level=level)
+        self._setup_logger(level=level, logger=logger)
 
     def get_metrics(self) -> Dict[str, Any]:
         """
