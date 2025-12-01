@@ -9,6 +9,61 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ### Added
 
+#### Scheduler Module - Complete Refactoring (Production-Ready)
+- **Daemon Mode Execution**
+  - `start(blocking=True)` for continuous execution that never terminates
+  - Automatic signal handling (SIGINT, SIGTERM) for graceful shutdown
+  - Thread-safe operations with RLock synchronization
+
+- **Task Dependencies and DAGs**
+  - New `Task` class with dependency support
+  - Sequential task execution: tasks only run if dependencies succeed
+  - Perfect for ETL pipelines and complex workflows
+
+- **Automatic Retry System**
+  - Configurable retries: `max_retries`, `retry_delay`, `retry_backoff`
+  - Exponential backoff: delay × backoff^attempt
+  - Retry metrics tracking
+
+- **Callbacks and Hooks**
+  - `on_success`: executed when task succeeds
+  - `on_failure`: executed after all retries fail
+  - `on_retry`: executed on each retry attempt
+  - Full exception and result passing to callbacks
+
+- **Comprehensive Metrics System**
+  - New `JobMetrics` class for detailed task tracking
+  - Global metrics: total executions, failures, retries, uptime
+  - Per-task metrics: success rate, average duration, last state
+  - `get_task_metrics()` and `get_all_metrics()` methods
+
+- **Job States**
+  - New `JobState` enum: PENDING, RUNNING, SUCCESS, FAILED, RETRYING, SKIPPED
+  - Precise lifecycle tracking
+  - State-based decision making
+
+- **Conditional Execution**
+  - `condition` parameter: function that returns True/False
+  - Dynamic task execution based on runtime conditions
+  - Use cases: business hours, resource availability, etc.
+
+- **Execution Timeouts**
+  - `timeout` parameter for maximum execution time
+  - Automatic cancellation of long-running tasks
+  - Prevention of task hangs
+
+- **Advanced Task Control**
+  - `pause_job()` and `resume_job()` for runtime control
+  - `reschedule_job()` for dynamic schedule changes
+  - `is_running()` for scheduler state checking
+  - `print_jobs()` for detailed job information
+
+- **Robust Configuration**
+  - `max_workers`: control task concurrency
+  - `coalesce`: combine missed executions
+  - `misfire_grace_time`: grace period for missed executions
+  - Full timezone support
+
 #### InfluxDB Module - Advanced Features
 - **Parallel Write Capabilities**
   - `write_dataframe_parallel()` for concurrent batch processing with ThreadPoolExecutor

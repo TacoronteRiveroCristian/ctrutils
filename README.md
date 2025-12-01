@@ -1,213 +1,280 @@
-# ctrutils# ctrutils
+# 🛠️ ctrutils
 
+**ctrutils** es una librería minimalista de utilidades en Python enfocada en operaciones con InfluxDB, programación de tareas robusta (tipo Airflow), y logging centralizado.
 
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**ctrutils** es una librería minimalista de utilidades en Python enfocada en operaciones con InfluxDB, programación de tareas y logging centralizado.**ctrutils** es una librería minimalista de utilidades en Python enfocada en operaciones con InfluxDB y programación de tareas.
+## 📦 Módulos
 
+### ⏰ Scheduler
+**Programación robusta de tareas tipo Airflow (mejorado en v11.0.0)**
+- ✅ Ejecución continua que nunca termina (modo daemon)
+- ✅ Dependencias entre tareas (DAGs - pipelines secuenciales)
+- ✅ Reintentos automáticos con backoff exponencial
+- ✅ Callbacks y hooks (on_success, on_failure, on_retry)
+- ✅ Ejecución condicional
+- ✅ Métricas detalladas
+- ✅ Expresiones crontab completas
+- ✅ Timeouts por tarea
+- ✅ Graceful shutdown
 
+[📖 Ver documentación completa del Scheduler](ctrutils/scheduler/README.md)
 
-## 📦 Módulos## 📦 Módulos
+### 🗄️ InfluxDB Operations
+**Operaciones avanzadas con InfluxDB**
+- Validación automática de datos (NaN, infinitos, None)
+- Escritura paralela para grandes volúmenes
+- Downsampling y continuous queries
+- Backup y restore de measurements
+- Métricas de calidad de datos
+- Métodos administrativos completos
 
-
-
-### 🗄️ InfluxDB Operations### 🗄️ InfluxDB Operations
-
-Operaciones avanzadas con InfluxDB incluyendo:Operaciones avanzadas con InfluxDB incluyendo:
-
-- Validación automática de datos (NaN, infinitos, None)- Validación automática de datos (NaN, infinitos, None)
-
-- Escritura por lotes para DataFrames grandes- Escritura por lotes para DataFrames grandes
-
-- Métodos administrativos (listar BD, mediciones, campos, tags)- Métodos administrativos (listar BD, mediciones, campos, tags)
-
-- Estadísticas detalladas de escritura- Estadísticas detalladas de escritura
-
-
-
-### ⏰ Scheduler### ⏰ Scheduler
-
-Programación y gestión de tareas automatizadas con APScheduler.Programación y gestión de tareas automatizadas con APScheduler.
-
-
-
-### 📝 Handler (Logging)## � Instalación
-
-Sistema de logging centralizado con soporte para:
-
-- **Consola y archivos** (con rotación por tamaño/tiempo)```bash
-
-- **Grafana Loki** - Logs centralizados y escalablespip install ctrutils
-
-- **Telegram** - Notificaciones en tiempo real```
-
+### 📝 Handler (Logging & Notifications)
+**Sistema de logging y notificaciones centralizado**
+- **Logging**: Consola, archivos con rotación
+- **Grafana Loki**: Logs centralizados y escalables
+- **Telegram**: Notificaciones en tiempo real
 - Integración completa con Scheduler e InfluxDB
-
-## 💡 Uso Rápido
 
 ## 🚀 Instalación
 
-```python
-
-```bashfrom ctrutils import InfluxdbOperation, Scheduler
-
+```bash
 pip install ctrutils
 
-# InfluxDB
+# Para usar Loki y Telegram (opcional):
+pip install requests
+```
 
-# Para usar Loki y Telegram:influx = InfluxdbOperation(host='localhost', port=8086)
+## 💡 Uso Rápido
 
-pip install requestsstats = influx.write_dataframe(
+### Scheduler - Nunca Termina
 
-```    measurement='datos',
+```python
+from ctrutils.scheduler import Scheduler, Task
 
-    data=df,
+# Crear scheduler
+scheduler = Scheduler(timezone="Europe/Madrid")
 
-## 💡 Uso Rápido    validate_data=True  # Limpia NaN automáticamente
-
+# Añadir tarea que se ejecuta cada 5 minutos
+scheduler.add_job(
+    func=mi_funcion,
+    trigger="cron",
+    job_id="tarea",
+    trigger_args={"minute": "*/5"},
+    max_retries=3,
 )
+
+# Iniciar (NUNCA termina hasta Ctrl+C)
+scheduler.start(blocking=True)
+```
+
+### Scheduler - Pipeline ETL con Dependencias
+
+```python
+from ctrutils.scheduler import Scheduler, Task
+
+scheduler = Scheduler()
+
+# Extract
+extract = Task(
+    task_id="extract",
+    func=extract_data,
+    trigger_type="cron",
+    trigger_args={"minute": "*/15"},
+    max_retries=3,
+)
+
+# Transform (depende de Extract)
+transform = Task(
+    task_id="transform",
+    func=transform_data,
+    trigger_type="cron",
+    trigger_args={"minute": "*/15"},
+    dependencies=["extract"],  # Solo ejecuta si extract OK
+    max_retries=3,
+)
+
+# Load (depende de Transform)
+load = Task(
+    task_id="load",
+    func=load_data,
+    trigger_type="cron",
+    trigger_args={"minute": "*/15"},
+    dependencies=["transform"],  # Solo ejecuta si transform OK
+    on_failure=lambda e: alert_team(e),
+)
+
+scheduler.add_task(extract)
+scheduler.add_task(transform)
+scheduler.add_task(load)
+
+# Nunca termina
+scheduler.start(blocking=True)
+```
 
 ### InfluxDB
 
-# Scheduler
+```python
+from ctrutils import InfluxdbOperation
 
-```pythonscheduler = Scheduler()
+influx = InfluxdbOperation(host='localhost', port=8086)
 
-from ctrutils import InfluxdbOperationscheduler.add_job(func=mi_funcion, trigger='interval', hours=1)
-
-scheduler.start()
-
-influx = InfluxdbOperation(host='localhost', port=8086)```
-
+# Escribir DataFrame con validación automática
 stats = influx.write_dataframe(
-
-    measurement='datos',## � Testing
-
+    measurement='datos',
     data=df,
-
-    validate_data=True  # Limpia NaN automáticamenteEl proyecto incluye una suite completa de tests:
-
+    validate_data=True,  # Limpia NaN automáticamente
 )
 
-``````bash
-
-# Ejecutar tests unitarios (rápido, sin dependencias)
-
-### Scheduler con Loggingpytest tests/unit/ -v
-
-
-
-```python# Ejecutar tests de integración (requiere InfluxDB)
-
-from ctrutils import Scheduler, LoggingHandlerpytest tests/integration/ -v
-
-
-
-logger = LoggingHandler.production_logger(# Ejecutar todos los tests con coverage
-
-    name="scheduler",pytest --cov=ctrutils --cov-report=html
-
-    log_file="scheduler.log",
-
-    loki_url="http://loki:3100",# Usar el script helper
-
-    loki_labels={"app": "myapp", "env": "prod"}./run-tests.sh unit        # Solo unitarios
-
-)./run-tests.sh coverage    # Con coverage
-
-./run-tests.sh html        # Reporte HTML
-
-scheduler = Scheduler(logger=logger)```
-
-scheduler.add_job(
-
-    func=mi_funcion, Para más información sobre tests, ver [tests/README.md](tests/README.md).
-
-    trigger='interval',
-
-    trigger_args={'hours': 1}## 📊 Coverage
-
-)
-
-scheduler.start()El proyecto mantiene >80% de cobertura de código. Ver reporte completo en `htmlcov/` después de ejecutar tests.
-
+print(f"Escritos: {stats['successful_points']}")
 ```
 
-## �🤝 Contribuciones
-
-### Logger Standalone
-
-¡Las contribuciones son bienvenidas! Si encuentras algún problema o tienes alguna mejora, no dudes en abrir un issue o enviar un pull request.
+### Logging
 
 ```python
+from ctrutils.handler import LoggingHandler
 
-from ctrutils import LoggingHandler## 📬 Contacto
+# Crear logger con rotación
+logger = LoggingHandler(
+    logger_name="mi_app",
+    level=logging.INFO,
+)
 
-import logging
-
-Si tienes alguna pregunta o sugerencia, contacta a través de [GitHub](https://github.com/TacoronteRiveroCristian/ctrutils/issues) o mediante el correo electrónico [tacoronteriverocristian@gmail.com](mailto:tacoronteriverocristian@gmail.com).
-
-# Logger rápido de consola
-
-logger = LoggingHandler.quick_console_logger("app", logging.INFO)## 📜 Licencia
-
-logger.info("Hello World")
-
-Este proyecto está bajo la siguiente [licencia](https://github.com/TacoronteRiveroCristian/ctrutils/blob/main/LICENSE).
-
-# Logger completo con múltiples outputs
-handler = LoggingHandler()
-logger = handler.add_handlers([
-    handler.create_stream_handler(),
-    handler.create_file_handler("app.log"),
-    handler.create_loki_handler(
-        url="http://loki:3100",
-        labels={"app": "myapp"}
+# Añadir handlers
+logger.add_handlers([
+    logger.create_stream_handler(),
+    logger.create_rotating_file_handler(
+        filename="app.log",
+        max_bytes=10*1024*1024,  # 10MB
+        backup_count=5,
     )
 ])
 ```
 
-## 📚 Documentación Handler
+## 📁 Estructura del Proyecto
 
-Ver [ctrutils/handler/README.md](ctrutils/handler/README.md) para:
-- Ejemplos completos de Loki y Telegram
-- Integración con Scheduler e InfluxDB
-- Configuración de producción
-- Troubleshooting
+```
+ctrutils/
+├── config/                  # Archivos de configuración de herramientas
+│   ├── .coveragerc         # Coverage
+│   ├── .isort.cfg          # Import sorting
+│   ├── .pylintrc           # Linting
+│   ├── mypy.ini            # Type checking
+│   └── pytest.ini          # Testing
+├── ctrutils/                # Código fuente principal
+│   ├── database/           # Módulos de base de datos
+│   │   └── influxdb/       # InfluxDB operations
+│   ├── handler/            # Logging y notificaciones
+│   │   ├── logging/        # Handlers de logging
+│   │   └── notification/   # Loki, Telegram
+│   └── scheduler/          # Scheduler robusto
+├── docs/                    # Documentación
+│   ├── scheduler/          # Docs específicas del scheduler
+│   ├── QUICK_START.md      # Guía rápida
+│   └── TEST_SUMMARY.md     # Documentación de tests
+├── examples/                # Ejemplos de uso
+│   ├── scheduler_simple.py
+│   └── scheduler_advanced_demo.py
+├── scripts/                 # Scripts de utilidad
+│   ├── publish-project.sh
+│   └── run-tests.sh
+├── tests/                   # Suite de tests
+│   ├── unit/               # Tests unitarios
+│   └── integration/        # Tests de integración
+├── makefiles/              # Makefiles modulares
+├── CHANGELOG.md            # Historial de cambios
+├── README.md               # Este archivo
+└── pyproject.toml          # Configuración del proyecto
+```
 
-## ✅ Testing
+## 🧪 Testing
 
 El proyecto incluye una suite completa de tests:
 
 ```bash
-# Ejecutar tests unitarios (rápido, sin dependencias)
-pytest tests/unit/ -v
+# Ejecutar todos los tests
+make test
 
-# Ejecutar tests de integración (requiere InfluxDB)
-pytest tests/integration/ -v
+# Solo tests unitarios (rápido, sin dependencias)
+make test-unit
 
-# Ejecutar todos los tests con coverage
-pytest --cov=ctrutils --cov-report=html
+# Tests de integración (requiere InfluxDB)
+make test-integration
 
-# Usar el script helper
-./run-tests.sh unit        # Solo unitarios
-./run-tests.sh coverage    # Con coverage
-./run-tests.sh html        # Reporte HTML
+# Tests con coverage
+make test-coverage
+
+# Ver todos los comandos disponibles
+make help
 ```
 
-Para más información sobre tests, ver [tests/README.md](tests/README.md).
+## 📚 Documentación
 
-## 📊 Coverage
+- **[Quick Start](docs/QUICK_START.md)** - Guía de inicio rápido
+- **[Scheduler Guide](ctrutils/scheduler/README.md)** - Documentación completa del scheduler
+- **[Scheduler Cheat Sheet](docs/scheduler/SCHEDULER_CHEATSHEET.md)** - Referencia rápida
+- **[Test Summary](docs/TEST_SUMMARY.md)** - Guía de testing
+- **[Makefile Commands](docs/MAKEFILE_SUMMARY.md)** - Comandos disponibles
 
-El proyecto mantiene >80% de cobertura de código. Ver reporte completo en `htmlcov/` después de ejecutar tests.
+## 🔧 Desarrollo
 
-## 🤝 Contribuciones
+```bash
+# Instalar dependencias de desarrollo
+poetry install
 
-¡Las contribuciones son bienvenidas! Si encuentras algún problema o tienes alguna mejora, no dudes en abrir un issue o enviar un pull request.
+# Ejecutar linters
+make lint
 
-## 📬 Contacto
+# Formatear código
+make format
 
-Si tienes alguna pregunta o sugerencia, contacta a través de [GitHub](https://github.com/TacoronteRiveroCristian/ctrutils/issues) o mediante el correo electrónico [tacoronteriverocristian@gmail.com](mailto:tacoronteriverocristian@gmail.com).
+# Verificar tipos
+make type-check
 
-## 📜 Licencia
+# Verificación completa antes de commit
+make check
+```
 
-Este proyecto está bajo la siguiente [licencia](https://github.com/TacoronteRiveroCristian/ctrutils/blob/main/LICENSE).
+## 📋 Requisitos
+
+- Python 3.8+
+- APScheduler 3.10+
+- InfluxDB-Python 5.3+
+- Pandas (para operaciones con DataFrames)
+
+## 🤝 Contribución
+
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) para guías de contribución.
+
+## 📄 Licencia
+
+Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
+
+## 🔗 Enlaces
+
+- **Repositorio**: [GitHub](https://github.com/TacoronteRiveroCristian/ctrutils)
+- **PyPI**: [ctrutils](https://pypi.org/project/ctrutils/)
+- **Documentación**: [Docs](docs/)
+
+## 📝 Changelog
+
+Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de cambios.
+
+## ⭐ Características Destacadas v11.0.0
+
+### Scheduler Mejorado
+El scheduler ha sido completamente refactorizado para ser una solución production-ready:
+
+- **Nunca termina**: Modo daemon con `blocking=True`
+- **DAGs completos**: Dependencias entre tareas tipo Airflow
+- **Recuperación automática**: Reintentos con backoff exponencial
+- **Monitoreo**: Métricas detalladas de ejecución
+- **Robusto**: Thread-safe, graceful shutdown, timeouts
+
+[Ver mejoras completas](docs/scheduler/SCHEDULER_IMPROVEMENTS.md)
+
+---
+
+**Desarrollado por**: Cristian Tacoronte Rivero  
+**Versión**: 11.0.0

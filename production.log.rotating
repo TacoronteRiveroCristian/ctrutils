@@ -1,6 +1,0 @@
-2025-11-01 13:36:47,028 - demo_production - INFO - 🚀 Logger de producción configurado
-2025-11-01 13:36:47,032 - demo_production - INFO - 📊 Este log se envía a archivo + Loki
-2025-11-01 13:36:47,033 - demo_production - ERROR - ❌ Este error se envía también a Telegram (si está configurado)
-2025-11-01 13:37:00,827 - demo_production - INFO - 🚀 Logger de producción configurado
-2025-11-01 13:37:00,830 - demo_production - INFO - 📊 Este log se envía a archivo + Loki
-2025-11-01 13:37:00,831 - demo_production - ERROR - ❌ Este error se envía también a Telegram (si está configurado)

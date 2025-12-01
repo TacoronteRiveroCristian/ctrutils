@@ -5,7 +5,7 @@
 
 lint: ## Ejecutar linters (pylint y flake8)
 	$(call print_blue,🔍 Ejecutando linters...)
-	$(POETRY) run pylint $(SRC_DIR) --rcfile=.pylintrc || true
+	$(POETRY) run pylint $(SRC_DIR) --rcfile=config/.pylintrc || true
 	$(POETRY) run flake8 $(SRC_DIR) --max-line-length=120 --extend-ignore=E203,W503
 	$(call print_green,✅ Linting completado)
 
@@ -23,7 +23,7 @@ check-format: ## Verificar formato sin modificar archivos
 
 type-check: ## Verificar tipos con mypy
 	$(call print_blue,🔍 Verificando tipos con mypy...)
-	$(POETRY) run mypy $(SRC_DIR) --config-file=mypy.ini
+	$(POETRY) run mypy $(SRC_DIR) --config-file=config/mypy.ini
 	$(call print_green,✅ Type checking completado)
 
 qa: lint type-check check-format ## Ejecutar todas las verificaciones de calidad
