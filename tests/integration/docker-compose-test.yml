@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  influxdb-test:
+    image: influxdb:1.8
+    container_name: influxdb-integration-test
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=test_db
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - influxdb_test_data:/var/lib/influxdb
+    networks:
+      - test_network
+
+volumes:
+  influxdb_test_data:
+
+networks:
+  test_network:
+    driver: bridge

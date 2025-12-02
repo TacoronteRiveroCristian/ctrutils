@@ -46,3 +46,33 @@ test-markers: ## Mostrar todos los markers disponibles
 	@echo "Markers disponibles:"
 	@echo ""
 	$(POETRY) run $(PYTEST) --markers
+
+test-coverage-warn: ## Tests con warnings de coverage (no falla build)
+	$(call print_blue,🧪 Ejecutando tests con coverage warnings...)
+	@$(POETRY) run $(PYTEST) $(TEST_DIR)/ -v --cov=$(PROJECT_NAME) --cov-report=term-missing --cov-report=xml --cov-branch || true
+	@echo ""
+	@if [ -f coverage.xml ]; then \
+		echo "$(shell tput setaf 3)⚠️  Verificando cobertura de módulos...$(shell tput sgr0)"; \
+		INFLUXDB_COV=$$(python3 -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); pkg = root.find('.//package[@name=\"ctrutils/database/influxdb\"]'); print(round(float(pkg.attrib['line-rate']) * 100, 2)) if pkg is not None else print('0')" 2>/dev/null || echo "0"); \
+		SCHEDULER_COV=$$(python3 -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); pkg = root.find('.//package[@name=\"ctrutils/scheduler\"]'); print(round(float(pkg.attrib['line-rate']) * 100, 2)) if pkg is not None else print('0')" 2>/dev/null || echo "0"); \
+		echo ""; \
+		echo "📊 Cobertura por módulo:"; \
+		echo "  - InfluxDB: $$INFLUXDB_COV% (objetivo: 80%+)"; \
+		echo "  - Scheduler: $$SCHEDULER_COV% (objetivo: 80%+)"; \
+		echo ""; \
+		if [ "$$(echo "$$INFLUXDB_COV < 80" | bc 2>/dev/null || echo 1)" -eq 1 ]; then \
+			echo "$(shell tput setaf 3)⚠️  WARNING: InfluxDB coverage está bajo 80%$(shell tput sgr0)"; \
+		fi; \
+		if [ "$$(echo "$$SCHEDULER_COV < 80" | bc 2>/dev/null || echo 1)" -eq 1 ]; then \
+			echo "$(shell tput setaf 3)⚠️  WARNING: Scheduler coverage está bajo 80%$(shell tput sgr0)"; \
+		fi; \
+	fi
+	$(call print_green,✅ Tests completados - ver warnings arriba)
+
+test-edge-cases: ## Solo tests de edge cases
+	$(call print_blue,🧪 Ejecutando tests de edge cases...)
+	$(POETRY) run $(PYTEST) $(TEST_DIR)/ -v -m edge_case
+	$(call print_green,✅ Tests de edge cases completados)
+
+test-docker: docker-test-up test-integration docker-test-down ## Ciclo completo Docker
+	$(call print_green,✅ Ciclo completo de tests con Docker completado)

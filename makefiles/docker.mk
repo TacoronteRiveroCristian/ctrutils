@@ -67,3 +67,37 @@ docker-backup-test-clean: ## Limpiar datos y logs del test de backup
 	$(call print_yellow,🧹 Limpiando datos del test de backup...)
 	@cd tests/integration/influxdb_backup_test && rm -rf backup_data/* logs/*
 	@$(call print_green,✅ Limpieza completa)
+
+# Docker Test Environment targets
+.PHONY: docker-test-up docker-test-down docker-test-status docker-test-wait
+
+docker-test-up: ## Iniciar InfluxDB ligero para tests de integración
+	$(call print_blue,🐳 Iniciando InfluxDB de test...)
+	@cd tests/integration && docker-compose -f docker-compose-test.yml up -d
+	@echo "Esperando a que InfluxDB esté listo..."
+	@$(MAKE) docker-test-wait
+	$(call print_green,✅ InfluxDB de test listo en localhost:8086)
+
+docker-test-down: ## Detener y limpiar InfluxDB de test
+	$(call print_yellow,🛑 Deteniendo InfluxDB de test...)
+	@cd tests/integration && docker-compose -f docker-compose-test.yml down -v
+	$(call print_green,✅ InfluxDB de test detenido y limpiado)
+
+docker-test-status: ## Ver estado del contenedor de test
+	@echo "Estado de InfluxDB de test:"
+	@docker ps --filter "name=influxdb-integration-test" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || echo "❌ No está corriendo"
+
+docker-test-wait: ## Esperar a que InfluxDB esté listo (con health check)
+	@echo "Esperando health check de InfluxDB..."
+	@timeout=60; \
+	while [ $$timeout -gt 0 ]; do \
+		if docker inspect influxdb-integration-test 2>/dev/null | grep -q '"Health":.*"Status":"healthy"'; then \
+			echo "✅ InfluxDB está saludable"; \
+			exit 0; \
+		fi; \
+		echo "⏳ Esperando... ($$timeout segundos restantes)"; \
+		sleep 2; \
+		timeout=$$((timeout-2)); \
+	done; \
+	echo "❌ Timeout esperando InfluxDB"; \
+	exit 1
