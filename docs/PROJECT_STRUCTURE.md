@@ -27,6 +27,11 @@ Crear una estructura clara y mantenible eliminando archivos innecesarios y agrup
 ```
 ctrutils/
 ├── Archivos raíz (configuración principal)
+│   ├── .coveragerc      # Coverage configuration
+│   ├── .isort.cfg       # Import sorting
+│   ├── .pylintrc        # Linting rules
+│   ├── mypy.ini         # Type checking
+│   ├── pytest.ini       # Testing configuration
 │   ├── CHANGELOG.md
 │   ├── CONTRIBUTING.md
 │   ├── LICENSE
@@ -35,14 +40,6 @@ ctrutils/
 │   ├── poetry.lock
 │   ├── pyproject.toml
 │   └── requirements.txt
-│
-├── config/              # Configuraciones de herramientas
-│   ├── .coveragerc      # Coverage configuration
-│   ├── .isort.cfg       # Import sorting
-│   ├── .pylintrc        # Linting rules
-│   ├── mypy.ini         # Type checking
-│   ├── pytest.ini       # Testing configuration
-│   └── README.md
 │
 ├── ctrutils/            # Código fuente
 │   ├── database/

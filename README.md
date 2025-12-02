@@ -156,12 +156,11 @@ logger.add_handlers([
 
 ```
 ctrutils/
-├── config/                  # Archivos de configuración de herramientas
-│   ├── .coveragerc         # Coverage
-│   ├── .isort.cfg          # Import sorting
-│   ├── .pylintrc           # Linting
-│   ├── mypy.ini            # Type checking
-│   └── pytest.ini          # Testing
+├── .coveragerc              # Coverage configuration
+├── .isort.cfg               # Import sorting
+├── .pylintrc                # Linting rules
+├── mypy.ini                 # Type checking
+├── pytest.ini               # Testing configuration
 ├── ctrutils/                # Código fuente principal
 │   ├── database/           # Módulos de base de datos
 │   │   └── influxdb/       # InfluxDB operations
