@@ -171,14 +171,12 @@ ctrutils/
 │   └── scheduler/          # Scheduler robusto
 ├── docs/                    # Documentación
 │   ├── scheduler/          # Docs específicas del scheduler
+│   ├── PROJECT_STRUCTURE.md # Arquitectura del proyecto
 │   ├── QUICK_START.md      # Guía rápida
 │   └── TEST_SUMMARY.md     # Documentación de tests
 ├── examples/                # Ejemplos de uso
 │   ├── scheduler_simple.py
 │   └── scheduler_advanced_demo.py
-├── scripts/                 # Scripts de utilidad
-│   ├── publish-project.sh
-│   └── run-tests.sh
 ├── tests/                   # Suite de tests
 │   ├── unit/               # Tests unitarios
 │   └── integration/        # Tests de integración
@@ -212,10 +210,11 @@ make help
 ## 📚 Documentación
 
 - **[Quick Start](docs/QUICK_START.md)** - Guía de inicio rápido
+- **[Project Structure](docs/PROJECT_STRUCTURE.md)** - Arquitectura y diseño del proyecto
 - **[Scheduler Guide](ctrutils/scheduler/README.md)** - Documentación completa del scheduler
 - **[Scheduler Cheat Sheet](docs/scheduler/SCHEDULER_CHEATSHEET.md)** - Referencia rápida
 - **[Test Summary](docs/TEST_SUMMARY.md)** - Guía de testing
-- **[Makefile Commands](docs/MAKEFILE_SUMMARY.md)** - Comandos disponibles
+- **[Makefile Commands](makefiles/README.md)** - Comandos disponibles
 
 ## 🔧 Desarrollo
 

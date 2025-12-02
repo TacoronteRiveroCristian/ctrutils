@@ -1,48 +1,59 @@
-# 📚 Documentation
+# Documentación ctrutils
 
-This directory contains all the documentation for the ctrutils project.
+Este directorio contiene toda la documentación del proyecto ctrutils.
 
-## 📁 Structure
+## Guías Principales
+
+- **[Quick Start](QUICK_START.md)** - Guía de inicio rápido para empezar a usar ctrutils
+- **[Project Structure](PROJECT_STRUCTURE.md)** - Arquitectura y decisiones de diseño del proyecto
+- **[Test Summary](TEST_SUMMARY.md)** - Guía completa de testing y cobertura
+
+## Documentación de Módulos
+
+### Scheduler
+- **[Scheduler README](../ctrutils/scheduler/README.md)** - Documentación completa del módulo scheduler
+- **[Scheduler Cheat Sheet](scheduler/SCHEDULER_CHEATSHEET.md)** - Referencia rápida de comandos comunes
+
+### Handler
+- **[Handler README](../ctrutils/handler/README.md)** - Sistema de logging y notificaciones
+
+### Database
+- **[InfluxDB Operations](../ctrutils/database/influxdb/)** - Módulo de operaciones con InfluxDB
+
+## Herramientas de Desarrollo
+
+- **[Makefile Commands](../makefiles/README.md)** - Comandos disponibles para desarrollo, testing y deployment
+
+## Estructura de Documentación
 
 ```
 docs/
-├── scheduler/              # Scheduler module documentation
-│   ├── CHEATSHEET.md      # Quick reference guide
-│   ├── IMPROVEMENTS.md     # Technical improvements details
-│   └── RESUMEN.md         # Summary in Spanish
-├── BEFORE_AFTER.md        # Project reorganization comparison
-├── MAKEFILE_SUMMARY.md    # Makefile commands summary
-├── QUICK_START.md         # Quick start guide
-├── REORGANIZATION.md      # Project reorganization details
-└── TEST_SUMMARY.md        # Testing documentation
+├── PROJECT_STRUCTURE.md    # Arquitectura del proyecto
+├── QUICK_START.md          # Guía de inicio rápido
+├── TEST_SUMMARY.md         # Documentación de tests
+├── README.md               # Este archivo (índice)
+└── scheduler/              # Docs específicas del scheduler
+    └── SCHEDULER_CHEATSHEET.md
 ```
 
-## 🚀 Quick Links
+## Documentación en el Código
 
-### Scheduler Module
-- **[Cheat Sheet](scheduler/SCHEDULER_CHEATSHEET.md)** - Quick reference for common tasks
-- **[Complete Guide](../ctrutils/scheduler/README.md)** - Full documentation with examples
-- **[Improvements](scheduler/SCHEDULER_IMPROVEMENTS.md)** - Technical details of v11.0.0 improvements
-- **[Resumen (ES)](scheduler/SCHEDULER_RESUMEN.md)** - Spanish summary of features
+Cada módulo tiene su propio README en su directorio:
+- `ctrutils/scheduler/README.md` - Documentación completa del scheduler
+- `ctrutils/handler/README.md` - Documentación del sistema de handlers
 
-### Project Organization
-- **[Before & After](BEFORE_AFTER.md)** - Visual comparison of project reorganization
-- **[Reorganization Details](REORGANIZATION.md)** - Complete reorganization documentation
+## Enlaces Externos
 
-### General Documentation
-- **[Quick Start](QUICK_START.md)** - Get started quickly
-- **[Makefile Summary](MAKEFILE_SUMMARY.md)** - Available make commands
-- **[Test Summary](TEST_SUMMARY.md)** - Testing guide and coverage
+- **[README Principal](../README.md)** - Información general del proyecto
+- **[CHANGELOG](../CHANGELOG.md)** - Historial de cambios y versiones
+- **[CONTRIBUTING](../CONTRIBUTING.md)** - Guía de contribución
 
-## 📖 Main Documentation
+## Recursos Adicionales
 
-The main README with installation instructions and API reference is in the root directory:
-- [Main README](../README.md)
+- **[GitHub Repository](https://github.com/TacoronteRiveroCristian/ctrutils)** - Repositorio del código fuente
+- **[PyPI Package](https://pypi.org/project/ctrutils/)** - Paquete publicado
 
-## 🔗 Module-Specific Documentation
+---
 
-Each module has its own README in its directory:
-- [Scheduler](../ctrutils/scheduler/README.md)
-- [Handler](../ctrutils/handler/README.md)
-- [Database](../ctrutils/database/influxdb/)
- 
+**Versión**: 11.0.0
+**Última actualización**: Noviembre 2025

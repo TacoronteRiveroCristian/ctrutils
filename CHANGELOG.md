@@ -145,10 +145,16 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
   - Now uses only pandas and datetime standard libraries
   - Maintains full backward compatibility
 
-- **Project Structure**
+- **Project Structure - Complete Reorganization**
   - Minimalist focus on InfluxDB and Scheduler modules only
   - Removed handler, template, and utils modules
   - Cleaned up documentation dependencies
+  - **Documentation centralized** in `docs/` directory (was scattered in root)
+  - **Configuration centralized** in `config/` directory with symlinks for compatibility
+  - **Makefile system** now modular in `makefiles/` directory
+  - **40% reduction** in root directory items (30+ → 18 items)
+  - Created `docs/PROJECT_STRUCTURE.md` consolidating architecture documentation
+  - All generated files properly gitignored (coverage, logs, cache)
 
 ### Removed
 - All Markdown (.md) documentation files from previous structure
