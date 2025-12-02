@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  influxdb-source:
+    image: influxdb:1.8
+    container_name: influxdb-backup-test-source
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=initial_db
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin123
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+    volumes:
+      - influxdb_source_data:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backup-test-network
+
+  influxdb-destination:
+    image: influxdb:1.8
+    container_name: influxdb-backup-test-destination
+    ports:
+      - "9086:8086"
+    environment:
+      - INFLUXDB_DB=initial_db
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin123
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+    volumes:
+      - influxdb_dest_data:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backup-test-network
+
+  python-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: influxdb-backup-test-generator
+    depends_on:
+      influxdb-source:
+        condition: service_healthy
+      influxdb-destination:
+        condition: service_healthy
+    volumes:
+      - ./backup_data:/app/backup_data
+      - ./logs:/app/logs
+      - ../../../:/ctrutils
+    environment:
+      - SOURCE_HOST=influxdb-source
+      - SOURCE_PORT=8086
+      - DEST_HOST=influxdb-destination
+      - DEST_PORT=8086
+      - INFLUXDB_USER=admin
+      - INFLUXDB_PASSWORD=admin123
+      - LOG_LEVEL=INFO
+      - TEST_DURATION=300
+      - INITIAL_HOURS=2
+      - CONTINUOUS_GENERATION=false
+      - GENERATION_INTERVAL=10
+      - PYTHONPATH=/ctrutils
+    networks:
+      - backup-test-network
+    command: python /app/main.py
+
+networks:
+  backup-test-network:
+    driver: bridge
+
+volumes:
+  influxdb_source_data:
+  influxdb_dest_data:

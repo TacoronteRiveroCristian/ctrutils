@@ -1,0 +1,48 @@
+{
+  "timestamp": "2025-12-02T12:35:03.947433",
+  "summary": {
+    "total_databases": 4,
+    "total_measurements": 0,
+    "matching_measurements": 0,
+    "match_percentage": 0,
+    "total_points_source": 0,
+    "total_points_dest": 0,
+    "total_difference": 0
+  },
+  "databases": [
+    {
+      "name": "iot_sensors",
+      "measurement_count": 0,
+      "total_points": 0,
+      "integrity_pass": true,
+      "match_percentage": 0
+    },
+    {
+      "name": "app_metrics",
+      "measurement_count": 0,
+      "total_points": 0,
+      "integrity_pass": true,
+      "match_percentage": 0
+    },
+    {
+      "name": "industrial_monitoring",
+      "measurement_count": 0,
+      "total_points": 0,
+      "integrity_pass": true,
+      "match_percentage": 0
+    },
+    {
+      "name": "smart_building",
+      "measurement_count": 0,
+      "total_points": 0,
+      "integrity_pass": true,
+      "match_percentage": 0
+    }
+  ],
+  "measurements": [],
+  "integrity": {
+    "passed": true,
+    "failed_measurements": [],
+    "failure_count": 0
+  }
+}
