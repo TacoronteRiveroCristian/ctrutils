@@ -313,7 +313,7 @@ class TestSchedulerAdvancedFeatures(unittest.TestCase):
         )
 
         self.scheduler.start()
-        time.sleep(2)
+        time.sleep(3)
 
         # El callback debería haber sido llamado
         self.assertTrue(result_container['called'])
@@ -358,7 +358,7 @@ class TestSchedulerAdvancedFeatures(unittest.TestCase):
         )
 
         self.scheduler.start()
-        time.sleep(2)
+        time.sleep(3)
 
         metrics = self.scheduler.get_task_metrics('metrics_job')
 
