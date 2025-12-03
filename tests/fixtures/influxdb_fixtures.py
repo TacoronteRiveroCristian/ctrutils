@@ -301,3 +301,277 @@ def create_value_normalization_test_cases():
         {'value': 'café', 'expected': 'café', 'description': 'accented characters'},
         {'value': '🌡️', 'expected': '🌡️', 'description': 'emoji'},
     ]
+
+
+def create_comprehensive_mock_client(
+    ping_success=True,
+    query_results=None,
+    write_success=True,
+    databases=None,
+    measurements=None,
+    error_on_query=None,
+    error_on_write=None,
+):
+    """
+    Create a comprehensive mock InfluxDB client with all commonly used methods.
+
+    Args:
+        ping_success: Whether ping() should return True
+        query_results: List of mock query results or single result
+        write_success: Whether write_points() should return True
+        databases: List of database dicts for get_list_database()
+        measurements: List of measurements for query() results
+        error_on_query: Exception to raise on query()
+        error_on_write: Exception to raise on write_points()
+    """
+    mock_client = Mock(spec=InfluxDBClient)
+
+    mock_client.ping.return_value = ping_success
+    mock_client.write_points.return_value = write_success
+
+    if error_on_write:
+        mock_client.write_points.side_effect = error_on_write
+
+    if error_on_query:
+        mock_client.query.side_effect = error_on_query
+    elif query_results is not None:
+        if isinstance(query_results, list):
+            mock_client.query.side_effect = query_results
+        else:
+            mock_client.query.return_value = query_results
+    else:
+        mock_client.query.return_value = MagicMock()
+
+    if databases is None:
+        databases = [{'name': 'test_db'}]
+    mock_client.get_list_database.return_value = databases
+
+    mock_client.create_database.return_value = None
+    mock_client.drop_database.return_value = None
+    mock_client.switch_database.return_value = None
+    mock_client.close.return_value = None
+    mock_client.drop_measurement.return_value = None
+
+    return mock_client
+
+
+def create_mock_query_result(points_data=None, raw_data=None):
+    """
+    Create a mock ResultSet from InfluxDB query.
+
+    Args:
+        points_data: List of point dicts with 'time' and field keys
+        raw_data: Raw data dict if you want full control
+    """
+    mock_result = MagicMock()
+
+    if raw_data:
+        mock_result.raw = raw_data
+    elif points_data:
+        mock_result.raw = {
+            'series': [{
+                'name': 'test_measurement',
+                'columns': ['time'] + list(points_data[0].keys() - {'time'}),
+                'values': [[p['time']] + [p[k] for k in points_data[0].keys() if k != 'time']
+                          for p in points_data]
+            }]
+        }
+    else:
+        mock_result.raw = {'series': []}
+
+    def get_points():
+        if points_data:
+            return iter(points_data)
+        return iter([])
+
+    mock_result.get_points.side_effect = get_points
+    mock_result.__iter__ = lambda self: iter([mock_result])
+
+    return mock_result
+
+
+def create_test_dataframe(
+    rows=100,
+    num_fields=3,
+    num_tags=2,
+    with_nans=False,
+    nan_percentage=0.1,
+    start_time=None,
+    freq='1min',
+    mixed_types=False,
+):
+    """
+    Generate test DataFrames with configurable properties.
+
+    Args:
+        rows: Number of rows
+        num_fields: Number of numeric field columns
+        num_tags: Number of tag columns
+        with_nans: Include NaN values
+        nan_percentage: Percentage of NaN values if with_nans=True
+        start_time: Start datetime, defaults to 2024-01-01
+        freq: Frequency string for date range
+        mixed_types: Include mixed data types
+    """
+    if start_time is None:
+        start_time = '2024-01-01'
+
+    time_index = pd.date_range(start=start_time, periods=rows, freq=freq)
+
+    data = {}
+
+    for i in range(num_fields):
+        values = np.random.randn(rows) * 100
+        if with_nans:
+            nan_indices = np.random.choice(rows, int(rows * nan_percentage), replace=False)
+            values[nan_indices] = np.nan
+        data[f'field_{i+1}'] = values
+
+    for i in range(num_tags):
+        data[f'tag_{i+1}'] = [f'value_{j % 5}' for j in range(rows)]
+
+    if mixed_types:
+        data['int_field'] = np.random.randint(0, 100, rows)
+        data['bool_field'] = np.random.choice([True, False], rows)
+        data['str_field'] = [f'string_{i}' for i in range(rows)]
+
+    df = pd.DataFrame(data, index=time_index)
+    return df
+
+
+def create_mock_error_scenarios():
+    """
+    Create mock error scenarios for testing error handling.
+    """
+    from influxdb.exceptions import InfluxDBClientError, InfluxDBServerError
+    from requests.exceptions import ConnectionError, Timeout
+
+    return {
+        'connection_error': ConnectionError("Connection refused"),
+        'timeout': Timeout("Request timeout"),
+        'client_error_400': InfluxDBClientError("Bad request", code=400),
+        'client_error_401': InfluxDBClientError("Unauthorized", code=401),
+        'client_error_404': InfluxDBClientError("Not found", code=404),
+        'server_error_500': InfluxDBServerError("Internal server error"),
+        'server_error_503': InfluxDBServerError("Service unavailable"),
+    }
+
+
+def create_database_list_response(db_names=None):
+    """Create mock response for get_list_database()."""
+    if db_names is None:
+        db_names = ['_internal', 'test_db', 'production']
+    return [{'name': name} for name in db_names]
+
+
+def create_measurements_list_response(measurement_names=None):
+    """Create mock response for SHOW MEASUREMENTS query."""
+    if measurement_names is None:
+        measurement_names = ['cpu', 'memory', 'disk', 'network']
+
+    mock_result = MagicMock()
+    mock_result.raw = {
+        'series': [{
+            'name': 'measurements',
+            'columns': ['name'],
+            'values': [[name] for name in measurement_names]
+        }]
+    }
+
+    points = [{'name': name} for name in measurement_names]
+    mock_result.get_points.return_value = iter(points)
+
+    return mock_result
+
+
+def create_tag_keys_response(tag_keys=None):
+    """Create mock response for SHOW TAG KEYS query."""
+    if tag_keys is None:
+        tag_keys = ['host', 'region', 'datacenter']
+
+    mock_result = MagicMock()
+    mock_result.raw = {
+        'series': [{
+            'name': 'cpu',
+            'columns': ['tagKey'],
+            'values': [[key] for key in tag_keys]
+        }]
+    }
+
+    points = [{'tagKey': key} for key in tag_keys]
+    mock_result.get_points.return_value = iter(points)
+
+    return mock_result
+
+
+def create_field_keys_response(field_keys=None):
+    """Create mock response for SHOW FIELD KEYS query."""
+    if field_keys is None:
+        field_keys = [
+            ('usage_user', 'float'),
+            ('usage_system', 'float'),
+            ('usage_idle', 'float'),
+            ('count', 'integer'),
+        ]
+
+    mock_result = MagicMock()
+    mock_result.raw = {
+        'series': [{
+            'name': 'cpu',
+            'columns': ['fieldKey', 'fieldType'],
+            'values': list(field_keys)
+        }]
+    }
+
+    points = [{'fieldKey': k, 'fieldType': t} for k, t in field_keys]
+    mock_result.get_points.return_value = iter(points)
+
+    return mock_result
+
+
+def create_retention_policies_response(policies=None):
+    """Create mock response for SHOW RETENTION POLICIES query."""
+    if policies is None:
+        policies = [
+            {'name': 'autogen', 'duration': '0s', 'shardGroupDuration': '168h0m0s',
+             'replicaN': 1, 'default': True},
+            {'name': 'one_day', 'duration': '24h0m0s', 'shardGroupDuration': '1h0m0s',
+             'replicaN': 1, 'default': False},
+        ]
+
+    mock_result = MagicMock()
+    columns = ['name', 'duration', 'shardGroupDuration', 'replicaN', 'default']
+    values = [[p['name'], p['duration'], p['shardGroupDuration'], p['replicaN'], p['default']]
+              for p in policies]
+
+    mock_result.raw = {
+        'series': [{
+            'columns': columns,
+            'values': values
+        }]
+    }
+
+    mock_result.get_points.return_value = iter(policies)
+
+    return mock_result
+
+
+def create_continuous_queries_response(queries=None):
+    """Create mock response for SHOW CONTINUOUS QUERIES."""
+    if queries is None:
+        queries = [
+            {'name': 'cq_30m', 'query': 'CREATE CONTINUOUS QUERY cq_30m ON test_db BEGIN SELECT mean(value) INTO mean_30m FROM data GROUP BY time(30m) END'},
+        ]
+
+    mock_result = MagicMock()
+    mock_result.raw = {
+        'series': [{
+            'name': 'test_db',
+            'columns': ['name', 'query'],
+            'values': [[q['name'], q['query']] for q in queries]
+        }]
+    }
+
+    mock_result.get_points.return_value = iter(queries)
+
+    return mock_result
