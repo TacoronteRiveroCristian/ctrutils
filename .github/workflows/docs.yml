@@ -1,0 +1,65 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs_source/**'
+      - 'ctrutils/**/*.py'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs_source/**'
+      - 'ctrutils/**/*.py'
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-docs
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --with docs --no-interaction
+
+      - name: Check documentation for errors
+        run: |
+          source .venv/bin/activate
+          make docs-check
+
+      - name: Build documentation
+        run: |
+          source .venv/bin/activate
+          make docs-build
+
+      - name: Check documentation coverage
+        run: |
+          source .venv/bin/activate
+          make docs-coverage
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: documentation-html
+          path: docs_build/html/
+          retention-days: 7

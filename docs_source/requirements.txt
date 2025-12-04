@@ -1,0 +1,15 @@
+# Documentation dependencies for ReadTheDocs
+sphinx>=7.2.0,<8.0.0
+sphinx-rtd-theme>=2.0.0,<3.0.0
+sphinx-autodoc-typehints>=1.25.0,<2.0.0
+myst-parser>=2.0.0,<3.0.0
+sphinx-copybutton>=0.5.2,<0.6.0
+linkify-it-py>=2.0.0,<3.0.0
+
+# Project dependencies (needed for autodoc)
+influxdb>=5.3.2,<6.0.0
+pandas>=2.2.3,<3.0.0
+numpy>=2.0.0,<3.0.0
+python-dateutil>=2.9.0,<3.0.0
+apscheduler>=3.10.0,<4.0.0
+pytz>=2024.1

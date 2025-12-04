@@ -43,7 +43,27 @@ except ImportError:
 
 
 class JobState(Enum):
-    """Estados posibles de un job."""
+    """
+    Estados posibles de un job durante su ciclo de vida.
+
+    Los estados representan las diferentes fases por las que pasa una tarea
+    desde su creación hasta su finalización o fallo.
+
+    Attributes:
+        PENDING: La tarea está programada pero aún no ha comenzado su ejecución.
+        RUNNING: La tarea está actualmente en ejecución.
+        SUCCESS: La tarea se completó exitosamente sin errores.
+        FAILED: La tarea falló después de agotar todos los reintentos.
+        RETRYING: La tarea falló pero se reintentará automáticamente.
+        SKIPPED: La tarea se omitió porque no cumplió su condición de ejecución
+                o porque una dependencia falló.
+
+    Examples:
+        >>> if task.state == JobState.SUCCESS:
+        ...     print("Tarea completada")
+        >>> elif task.state == JobState.RETRYING:
+        ...     print(f"Reintentando...")
+    """
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -53,9 +73,39 @@ class JobState(Enum):
 
 
 class JobMetrics:
-    """Métricas de ejecución de un job."""
+    """
+    Métricas de ejecución y monitoreo de un job.
+
+    Esta clase mantiene estadísticas detalladas sobre las ejecuciones de una tarea,
+    incluyendo contadores de éxitos/fallos, tiempos de ejecución, y tasa de éxito.
+
+    Las métricas se actualizan automáticamente en cada ejecución y se pueden
+    exportar a diccionario para logging o visualización.
+
+    Attributes:
+        total_runs (int): Número total de ejecuciones (incluye éxitos, fallos y reintentos).
+        successes (int): Número de ejecuciones exitosas.
+        failures (int): Número de ejecuciones fallidas (después de agotar reintentos).
+        retries (int): Número total de intentos de reintento realizados.
+        last_run_time (Optional[datetime]): Timestamp de la última ejecución.
+        last_duration (Optional[float]): Duración en segundos de la última ejecución.
+        last_state (Optional[JobState]): Estado final de la última ejecución.
+        avg_duration (float): Duración promedio de las ejecuciones exitosas en segundos.
+
+    Examples:
+        >>> metrics = JobMetrics()
+        >>> metrics.record_run(duration=1.5, state=JobState.SUCCESS)
+        >>> print(f"Tasa de éxito: {metrics.to_dict()['success_rate']:.2%}")
+        Tasa de éxito: 100.00%
+    """
 
     def __init__(self):
+        """
+        Inicializa todas las métricas en cero.
+
+        Las métricas comienzan vacías y se actualizan mediante el método
+        record_run() después de cada ejecución de la tarea.
+        """
         self.total_runs = 0
         self.successes = 0
         self.failures = 0
@@ -67,7 +117,22 @@ class JobMetrics:
         self._durations: List[float] = []
 
     def record_run(self, duration: float, state: JobState):
-        """Registra una ejecución del job."""
+        """
+        Registra los resultados de una ejecución del job.
+
+        Actualiza todos los contadores y métricas según el estado de la ejecución.
+        Para ejecuciones exitosas, también actualiza el promedio de duración.
+
+        Args:
+            duration: Tiempo de ejecución en segundos (debe ser >= 0).
+            state: Estado final de la ejecución (SUCCESS, FAILED, RETRYING).
+
+        Examples:
+            >>> metrics = JobMetrics()
+            >>> metrics.record_run(1.5, JobState.SUCCESS)
+            >>> metrics.record_run(2.1, JobState.SUCCESS)
+            >>> assert metrics.avg_duration == 1.8  # (1.5 + 2.1) / 2
+        """
         self.total_runs += 1
         self.last_run_time = datetime.now()
         self.last_duration = duration
@@ -83,7 +148,28 @@ class JobMetrics:
             self.retries += 1
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convierte las métricas a un diccionario."""
+        """
+        Convierte las métricas a un diccionario serializable.
+
+        Returns:
+            Dict con las siguientes claves:
+                - total_runs (int): Total de ejecuciones
+                - successes (int): Ejecuciones exitosas
+                - failures (int): Ejecuciones fallidas
+                - retries (int): Total de reintentos
+                - success_rate (float): Porcentaje de éxito (0.0 a 1.0)
+                - last_run_time (str|None): ISO timestamp de última ejecución
+                - last_duration (float|None): Duración de última ejecución
+                - last_state (str|None): Estado de última ejecución
+                - avg_duration (float): Duración promedio de ejecuciones exitosas
+
+        Examples:
+            >>> metrics = JobMetrics()
+            >>> metrics.record_run(1.5, JobState.SUCCESS)
+            >>> data = metrics.to_dict()
+            >>> print(data['success_rate'])  # 1.0
+            1.0
+        """
         return {
             "total_runs": self.total_runs,
             "successes": self.successes,
@@ -249,7 +335,23 @@ class Scheduler:
         self._setup_signal_handlers()
 
     def _setup_signal_handlers(self):
-        """Configura los manejadores de señales para shutdown graceful."""
+        """
+        Configura manejadores para señales del sistema (SIGINT, SIGTERM).
+
+        Permite un graceful shutdown cuando el scheduler recibe señales de terminación,
+        completando las tareas en ejecución antes de cerrar.
+
+        Internal:
+            Este método es privado y se llama automáticamente durante __init__().
+            No debe ser invocado directamente por usuarios de la librería.
+
+        Signals:
+            - SIGINT (Ctrl+C): Inicia shutdown graceful y termina el programa.
+            - SIGTERM: Inicia shutdown graceful desde el sistema operativo.
+
+        Thread Safety:
+            Thread-safe, utiliza RLock interno para sincronización.
+        """
         def signal_handler(signum, frame):
             self.logger.info(f"Received signal {signum}. Initiating graceful shutdown...")
             self.shutdown(wait=True)
@@ -259,7 +361,21 @@ class Scheduler:
         signal.signal(signal.SIGTERM, signal_handler)
 
     def _add_event_listeners(self):
-        """Añade listeners para los eventos del scheduler."""
+        """
+        Añade listeners para los eventos del scheduler.
+
+        Configura callbacks para los eventos de APScheduler (ejecución, error, missed, submit)
+        y actualiza las métricas globales y logs según el tipo de evento.
+
+        Internal:
+            Este método es privado y se llama automáticamente durante __init__().
+
+        Events:
+            - EVENT_JOB_EXECUTED: Job completado exitosamente, incrementa contador.
+            - EVENT_JOB_ERROR: Job falló, incrementa failures y registra error con traceback.
+            - EVENT_JOB_MISSED: Job perdió su ventana de ejecución por misfire.
+            - EVENT_JOB_SUBMITTED: Job enviado al executor para procesamiento.
+        """
         def job_listener(event: JobExecutionEvent):
             if event.code == EVENT_JOB_ERROR:
                 self.global_metrics["total_failures"] += 1
@@ -283,6 +399,28 @@ class Scheduler:
     def _wrap_task_execution(self, task: Task) -> Callable:
         """
         Envuelve la ejecución de una tarea con lógica de reintentos, dependencias y callbacks.
+
+        Crea un wrapper que implementa la lógica completa de ejecución de tareas:
+        verificación de condiciones, validación de dependencias, manejo de reintentos
+        con backoff exponencial, timeouts, callbacks y actualización de métricas.
+
+        Args:
+            task: Instancia de Task a envolver con la lógica de ejecución.
+
+        Returns:
+            Callable: Función wrapper que ejecuta la tarea con toda la lógica adicional.
+
+        Internal:
+            Este método es privado y se llama automáticamente desde add_task().
+            El wrapper resultante es el que realmente se registra en APScheduler.
+
+        Behavior:
+            1. Verifica condición de ejecución (condition callable)
+            2. Valida que todas las dependencias estén completadas
+            3. Ejecuta la función con timeout si está especificado
+            4. Implementa reintentos automáticos con backoff exponencial
+            5. Ejecuta callbacks (on_success, on_failure, on_retry)
+            6. Actualiza métricas y estado de la tarea
         """
         @wraps(task.func)
         def wrapper():
@@ -388,7 +526,33 @@ class Scheduler:
     def _execute_with_timeout(
         self, func: Callable, args: tuple, kwargs: Dict[str, Any], timeout: int
     ) -> Any:
-        """Ejecuta una función con timeout."""
+        """
+        Ejecuta una función con timeout usando threading.
+
+        Crea un thread daemon para ejecutar la función y espera hasta el timeout
+        especificado. Si el thread no termina a tiempo, lanza TimeoutError.
+
+        Args:
+            func: Función a ejecutar con timeout.
+            args: Argumentos posicionales para la función.
+            kwargs: Argumentos nombrados para la función.
+            timeout: Tiempo máximo de ejecución en segundos.
+
+        Returns:
+            Any: El valor de retorno de la función ejecutada.
+
+        Raises:
+            TimeoutError: Si la ejecución excede el timeout especificado.
+            Exception: Cualquier excepción lanzada por la función original.
+
+        Internal:
+            Este método es privado y se usa internamente por _wrap_task_execution()
+            cuando una Task tiene timeout configurado.
+
+        Note:
+            Usa un thread daemon que se terminará cuando el programa principal termine,
+            incluso si la función aún está ejecutándose.
+        """
         result = [None]
         exception = [None]
 
@@ -596,12 +760,52 @@ class Scheduler:
             self.logger.info("Scheduler shut down.")
 
     def pause_job(self, job_id: str) -> None:
-        """Pausa un job específico."""
+        """
+        Pausa temporalmente la ejecución de una tarea programada.
+
+        La tarea permanece registrada pero no se ejecutará según su schedule
+        hasta que se llame a resume_job(). Las ejecuciones que ocurran mientras
+        está pausada se considerarán "missed" según la política de misfire.
+
+        Args:
+            job_id: Identificador único de la tarea a pausar.
+
+        Raises:
+            JobLookupError: Si el job_id no existe en el scheduler.
+
+        Examples:
+            >>> scheduler.pause_job("tarea_nocturna")
+            >>> # Durante el día, hacer mantenimiento...
+            >>> scheduler.resume_job("tarea_nocturna")
+
+        See Also:
+            resume_job: Reactiva una tarea pausada.
+            remove_job: Elimina permanentemente una tarea.
+        """
         self.scheduler.pause_job(job_id)
         self.logger.info(f"Job '{job_id}' paused.")
 
     def resume_job(self, job_id: str) -> None:
-        """Resume un job pausado."""
+        """
+        Reanuda la ejecución de una tarea previamente pausada.
+
+        La tarea volverá a ejecutarse según su schedule configurado. Si la siguiente
+        ejecución ya pasó, se ejecutará inmediatamente o según la política de misfire.
+
+        Args:
+            job_id: Identificador único de la tarea a reanudar.
+
+        Raises:
+            JobLookupError: Si el job_id no existe en el scheduler.
+
+        Examples:
+            >>> scheduler.pause_job("backup_nocturno")
+            >>> # Realizar mantenimiento...
+            >>> scheduler.resume_job("backup_nocturno")
+
+        See Also:
+            pause_job: Pausa una tarea temporalmente.
+        """
         self.scheduler.resume_job(job_id)
         self.logger.info(f"Job '{job_id}' resumed.")
 
@@ -629,9 +833,44 @@ class Scheduler:
         self.logger.info(f"Job '{job_id}' rescheduled with trigger '{trigger_type}'.")
 
     def is_running(self) -> bool:
-        """Retorna True si el scheduler está ejecutándose."""
+        """
+        Verifica si el scheduler está actualmente ejecutándose.
+
+        Returns:
+            bool: True si el scheduler está activo y procesando tareas,
+                  False en caso contrario.
+
+        Examples:
+            >>> scheduler.start()
+            >>> assert scheduler.is_running() is True
+            >>> scheduler.shutdown()
+            >>> assert scheduler.is_running() is False
+
+        See Also:
+            start: Inicia el scheduler.
+            shutdown: Detiene el scheduler.
+        """
         return self._running and self.scheduler.running
 
     def print_jobs(self) -> None:
-        """Imprime información de todos los jobs programados."""
+        """
+        Imprime información de todos los jobs programados en el scheduler.
+
+        Muestra una tabla formateada con información de cada job incluyendo:
+        ID, nombre, trigger, próxima ejecución y estado.
+
+        Esta función es útil para debugging y monitoreo del estado del scheduler.
+
+        Examples:
+            >>> scheduler.add_job(func=tarea1, trigger='cron',
+            ...                   job_id='tarea1',
+            ...                   trigger_args={'minute': '*/5'})
+            >>> scheduler.print_jobs()
+            Jobstore default:
+                tarea1 (trigger: cron[minute='*/5'], next run at: ...)
+
+        See Also:
+            get_jobs: Obtiene lista programática de jobs.
+            get_all_metrics: Obtiene métricas de todos los jobs.
+        """
         self.scheduler.print_jobs()

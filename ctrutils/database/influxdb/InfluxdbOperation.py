@@ -374,6 +374,251 @@ class InfluxdbOperation:
 
         return df
 
+    def query_to_dataframe(
+        self,
+        measurement: str,
+        fields: Optional[List[str]] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        where_conditions: Optional[Dict[str, Any]] = None,
+        limit: Optional[int] = None,
+        database: Optional[str] = None,
+        convert_to_local_tz: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Consulta datos de un measurement y devuelve un DataFrame.
+
+        Args:
+            measurement: Nombre del measurement.
+            fields: Lista de campos a consultar (None = todos).
+            start_time: Tiempo de inicio (formato ISO8601 o string InfluxQL compatible).
+            end_time: Tiempo de fin (formato ISO8601 o string InfluxQL compatible).
+            where_conditions: Condiciones adicionales como dict {'tag': 'value'}.
+            limit: Limitar numero de resultados.
+            database: Base de datos (None = usa la actual).
+            convert_to_local_tz: Si True, convierte el indice a la timezone local.
+
+        Returns:
+            DataFrame con los datos consultados, indice es time en UTC.
+
+        Ejemplos:
+            >>> # Leer ultimos 100 puntos
+            >>> df = influx.query_to_dataframe(
+            ...     measurement='temperatura',
+            ...     limit=100,
+            ...     database='mi_db'
+            ... )
+            >>>
+            >>> # Leer rango de tiempo especifico
+            >>> df = influx.query_to_dataframe(
+            ...     measurement='temperatura',
+            ...     start_time='2024-01-01T00:00:00Z',
+            ...     end_time='2024-01-31T23:59:59Z',
+            ...     database='mi_db'
+            ... )
+        """
+        db_to_use = database or self._database
+        if db_to_use is None:
+            raise ValueError(
+                "Debe proporcionar una base de datos o establecerla mediante el metodo 'switch_database'."
+            )
+        self.switch_database(db_to_use)
+
+        # Construir query
+        field_str = ", ".join(fields) if fields else "*"
+        query = f'SELECT {field_str} FROM "{measurement}"'
+
+        # Agregar condiciones WHERE
+        where_clauses = []
+        if start_time:
+            where_clauses.append(f"time >= '{start_time}'")
+        if end_time:
+            where_clauses.append(f"time <= '{end_time}'")
+        if where_conditions:
+            for key, value in where_conditions.items():
+                if isinstance(value, str):
+                    where_clauses.append(f'"{key}" = \'{value}\'')
+                else:
+                    where_clauses.append(f'"{key}" = {value}')
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        # Ordenar por tiempo descendente
+        query += " ORDER BY time DESC"
+
+        # Limitar resultados
+        if limit:
+            query += f" LIMIT {limit}"
+
+        if self._logger:
+            self._logger.debug(f"Ejecutando query: {query}")
+
+        # Ejecutar query
+        result = self._client.query(query)
+        points = list(result.get_points())
+
+        if not points:
+            if self._logger:
+                self._logger.warning(f"No se encontraron datos para measurement '{measurement}'")
+            return pd.DataFrame()
+
+        # Convertir a DataFrame
+        df = pd.DataFrame(points)
+
+        if 'time' in df.columns:
+            df['time'] = pd.to_datetime(df['time'], utc=True)
+            if convert_to_local_tz:
+                df['time'] = df['time'].dt.tz_convert('local')
+            df.set_index('time', inplace=True)
+
+        return df
+
+    def read_last_n_points(
+        self,
+        measurement: str,
+        n: int = 100,
+        fields: Optional[List[str]] = None,
+        database: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """
+        Lee los ultimos N puntos de un measurement.
+
+        Args:
+            measurement: Nombre del measurement.
+            n: Numero de puntos a leer.
+            fields: Lista de campos a leer (None = todos).
+            database: Base de datos (None = usa la actual).
+
+        Returns:
+            DataFrame con los ultimos N puntos.
+
+        Ejemplos:
+            >>> # Leer ultimos 50 puntos
+            >>> df = influx.read_last_n_points('temperatura', n=50)
+        """
+        return self.query_to_dataframe(
+            measurement=measurement,
+            fields=fields,
+            limit=n,
+            database=database
+        )
+
+    def read_time_range(
+        self,
+        measurement: str,
+        start_time: Union[str, datetime, pd.Timestamp],
+        end_time: Union[str, datetime, pd.Timestamp],
+        fields: Optional[List[str]] = None,
+        database: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """
+        Lee datos de un rango de tiempo especifico.
+
+        Args:
+            measurement: Nombre del measurement.
+            start_time: Tiempo de inicio (acepta string, datetime o Timestamp).
+            end_time: Tiempo de fin (acepta string, datetime o Timestamp).
+            fields: Lista de campos a leer (None = todos).
+            database: Base de datos (None = usa la actual).
+
+        Returns:
+            DataFrame con los datos del rango de tiempo.
+
+        Ejemplos:
+            >>> # Usando strings
+            >>> df = influx.read_time_range(
+            ...     measurement='temperatura',
+            ...     start_time='2024-01-01T00:00:00Z',
+            ...     end_time='2024-01-31T23:59:59Z'
+            ... )
+            >>>
+            >>> # Usando datetime
+            >>> from datetime import datetime, timedelta
+            >>> now = datetime.now()
+            >>> df = influx.read_time_range(
+            ...     measurement='temperatura',
+            ...     start_time=now - timedelta(hours=24),
+            ...     end_time=now
+            ... )
+        """
+        # Convertir a formato ISO8601 si es necesario
+        if not isinstance(start_time, str):
+            start_time = self._convert_to_utc_iso(start_time)
+        if not isinstance(end_time, str):
+            end_time = self._convert_to_utc_iso(end_time)
+
+        return self.query_to_dataframe(
+            measurement=measurement,
+            fields=fields,
+            start_time=start_time,
+            end_time=end_time,
+            database=database
+        )
+
+    def get_measurements(self, database: Optional[str] = None) -> List[str]:
+        """
+        Obtiene la lista de mediciones (measurements) en una base de datos.
+
+        Este método es un alias conveniente de list_measurements() que devuelve
+        solo los nombres en lugar de objetos Result completos.
+
+        Args:
+            database: Nombre de la base de datos. Si es None, usa la base de datos
+                     por defecto configurada en el cliente.
+
+        Returns:
+            List[str]: Lista de nombres de mediciones ordenadas alfabéticamente.
+                      Devuelve lista vacía si no hay mediciones o si la base de
+                      datos no existe.
+
+        Raises:
+            InfluxDBClientError: Si hay error de conexión o permisos insuficientes.
+
+        Examples:
+            >>> influx = InfluxdbOperation(host='localhost', port=8086)
+            >>> measurements = influx.get_measurements('mi_db')
+            >>> print(f"Encontradas {len(measurements)} mediciones")
+            >>> for m in measurements:
+            ...     print(f"  - {m}")
+
+        See Also:
+            list_measurements: Método original que devuelve objetos Result.
+            get_databases: Obtiene lista de bases de datos.
+        """
+        return self.list_measurements(database)
+
+    def get_databases(self) -> List[str]:
+        """
+        Obtiene la lista de bases de datos disponibles en InfluxDB.
+
+        Este método es un alias conveniente de list_databases() para mantener
+        consistencia de nomenclatura con get_measurements().
+
+        Returns:
+            List[str]: Lista de nombres de bases de datos disponibles,
+                      incluyendo bases de datos del sistema como '_internal'.
+
+        Raises:
+            InfluxDBClientError: Si hay error de conexión al servidor.
+
+        Examples:
+            >>> influx = InfluxdbOperation(host='localhost', port=8086)
+            >>> databases = influx.get_databases()
+            >>> print("Bases de datos disponibles:")
+            >>> for db in databases:
+            ...     print(f"  - {db}")
+            Bases de datos disponibles:
+              - _internal
+              - mi_db
+              - produccion
+
+        See Also:
+            list_databases: Método original.
+            get_measurements: Obtiene lista de mediciones en una BD.
+        """
+        return self.list_databases()
+
     def normalize_value_to_write(self, value: Any) -> Any:
         """
         Normaliza el valor para su escritura en InfluxDB.
@@ -534,8 +779,9 @@ class InfluxdbOperation:
 
     def write_dataframe(
         self,
-        measurement: str,
-        data: pd.DataFrame,
+        measurement: Optional[str] = None,
+        data: Optional[pd.DataFrame] = None,
+        df: Optional[pd.DataFrame] = None,
         tags: Optional[dict] = None,
         database: Optional[str] = None,
         batch_size: int = 1000,
@@ -544,6 +790,9 @@ class InfluxdbOperation:
         convert_bool_to_float: bool = False,
         suffix_bool_to_float: str = "_bool_to_float",
         drop_na_rows: bool = False,
+        field_columns: Optional[List[str]] = None,
+        tag_columns: Optional[List[str]] = None,
+        convert_index_to_utc: bool = True,
     ) -> Dict[str, int]:
         """
         Convierte un DataFrame en una lista de puntos y los escribe en InfluxDB,
@@ -558,7 +807,8 @@ class InfluxdbOperation:
 
         Args:
             measurement: Nombre de la medicion en InfluxDB.
-            data: DataFrame con los datos a escribir. El indice debe ser DatetimeIndex.
+            data: DataFrame con los datos a escribir. El indice debe ser DatetimeIndex (acepta tambien 'df').
+            df: Alias para 'data' (por compatibilidad).
             tags: Tags adicionales para todos los puntos (opcional).
             database: Base de datos donde escribir (opcional si ya esta configurada).
             batch_size: Tamaño del lote para escritura. Por defecto 1000.
@@ -568,6 +818,9 @@ class InfluxdbOperation:
             convert_bool_to_float: Si True, convierte columnas booleanas a float.
             suffix_bool_to_float: Sufijo para columnas booleanas convertidas.
             drop_na_rows: Si True, elimina filas donde todos los valores son NaN.
+            field_columns: Lista de columnas a usar como fields (None = todas excepto tag_columns).
+            tag_columns: Lista de columnas a usar como tags adicionales.
+            convert_index_to_utc: Si True, convierte el indice a UTC antes de escribir.
 
         Returns:
             Diccionario con estadisticas de escritura.
@@ -591,30 +844,58 @@ class InfluxdbOperation:
             ... )
             >>> print(f"Escritos: {stats['written_points']}/{stats['total_points']}")
         """
-        if data is None or measurement is None:
+        # Compatibilidad con ambos parametros
+        dataframe = df if df is not None else data
+
+        if dataframe is None or measurement is None:
             raise ValueError(
-                "Debe proporcionar un DataFrame 'data' y un 'measurement'."
+                "Debe proporcionar un DataFrame 'data' o 'df' y un 'measurement'."
             )
 
-        if not isinstance(data.index, pd.DatetimeIndex):
+        if not isinstance(dataframe.index, pd.DatetimeIndex):
             raise TypeError("El indice del DataFrame debe ser de tipo DatetimeIndex.")
 
         # Crear una copia para no modificar el original
-        df = data.copy()
+        dataframe = dataframe.copy()
+
+        # Convertir indice a UTC si se solicita
+        if convert_index_to_utc:
+            if dataframe.index.tz is None:
+                # Localizar como UTC si no tiene timezone
+                dataframe.index = dataframe.index.tz_localize('UTC')
+            else:
+                # Convertir a UTC si tiene otro timezone
+                dataframe.index = dataframe.index.tz_convert('UTC')
 
         # Eliminar filas completamente vacias si se solicita
         if drop_na_rows:
-            df = df.dropna(how='all')
+            dataframe = dataframe.dropna(how='all')
+
+        # Separar columnas para tags y fields
+        tags_from_columns = {}
+        if tag_columns:
+            for col in tag_columns:
+                if col in dataframe.columns:
+                    # Los tags no pueden cambiar por fila en este enfoque simple
+                    # Tomamos el primer valor no-nulo
+                    first_val = dataframe[col].dropna().iloc[0] if not dataframe[col].dropna().empty else None
+                    if first_val is not None:
+                        tags_from_columns[col] = str(first_val)
+            dataframe = dataframe.drop(columns=[col for col in tag_columns if col in dataframe.columns])
+
+        # Determinar columnas de fields
+        if field_columns:
+            dataframe = dataframe[field_columns]
 
         # Convertir columnas booleanas si se solicita
         if convert_bool_to_float:
-            for column in df.select_dtypes(include=["bool"]).columns:
-                df[f"{column}{suffix_bool_to_float}"] = df[column].astype(float)
-                df = df.drop(columns=[column])
+            for column in dataframe.select_dtypes(include=["bool"]).columns:
+                dataframe[f"{column}{suffix_bool_to_float}"] = dataframe[column].astype(float)
+                dataframe = dataframe.drop(columns=[column])
 
         # Convertir DataFrame a lista de diccionarios de puntos
         points = []
-        for index, row in df.iterrows():
+        for index, row in dataframe.iterrows():
             # Construir los campos, aplicando normalizacion
             fields = {}
             for field, value in row.items():
@@ -642,9 +923,15 @@ class InfluxdbOperation:
                     "fields": fields,
                 }
 
-                # Agregar tags si se proporcionaron
+                # Agregar tags (tanto los proporcionados como los de columnas)
+                point_tags = {}
                 if tags:
-                    point["tags"] = tags
+                    point_tags.update(tags)
+                if tags_from_columns:
+                    point_tags.update(tags_from_columns)
+
+                if point_tags:
+                    point["tags"] = point_tags
 
                 points.append(point)
 
@@ -1172,7 +1459,56 @@ class InfluxdbOperation:
         database: Optional[str] = None,
     ) -> None:
         """
-        Elimina datos de una medicion en InfluxDB.
+        Elimina datos de una medición en InfluxDB.
+
+        Permite eliminar datos con filtros por rango de tiempo y/o tags específicos.
+        PRECAUCIÓN: Esta operación es irreversible.
+
+        Args:
+            measurement: Nombre de la medición de donde eliminar datos.
+            start_time: Tiempo de inicio para el rango de eliminación (opcional).
+                       Acepta string ISO8601 o pd.Timestamp.
+            end_time: Tiempo de fin para el rango de eliminación (opcional).
+                     Acepta string ISO8601 o pd.Timestamp.
+            filters: Diccionario de filtros adicionales por tags {tag: valor}.
+            database: Base de datos donde ejecutar el DELETE. Si es None, usa la BD actual.
+
+        Returns:
+            None: La operación no devuelve valor.
+
+        Raises:
+            ValueError: Si no se proporciona database y no hay BD configurada.
+            InfluxDBClientError: Si hay error ejecutando la operación.
+
+        Warning:
+            Esta operación elimina datos permanentemente y no se puede deshacer.
+            Considera hacer un backup antes de eliminar datos importantes.
+
+        Examples:
+            Eliminar todos los datos de una medición:
+
+            >>> influx.delete(measurement='temperatura_antigua', database='mi_db')
+
+            Eliminar datos de un rango de tiempo:
+
+            >>> influx.delete(
+            ...     measurement='sensores',
+            ...     start_time='2024-01-01T00:00:00Z',
+            ...     end_time='2024-01-31T23:59:59Z',
+            ...     database='mi_db'
+            ... )
+
+            Eliminar datos con filtro por tag:
+
+            >>> influx.delete(
+            ...     measurement='sensores',
+            ...     filters={'sensor_id': 'sensor_001'},
+            ...     database='mi_db'
+            ... )
+
+        See Also:
+            drop_measurement: Elimina la medición completa incluyendo esquema.
+            backup_measurement: Crea backup antes de eliminar.
         """
         db_to_use = database or self._database
         if db_to_use is None:
@@ -1203,7 +1539,40 @@ class InfluxdbOperation:
 
     def get_field_keys_grouped_by_type(self, measurement: str) -> Dict[str, List[str]]:
         """
-        Obtiene las claves de un measurement, agrupadas por tipo de dato.
+        Obtiene las claves de fields de un measurement, agrupadas por tipo de dato.
+
+        Este método es útil para construir queries dinámicas que necesitan aplicar
+        diferentes operaciones según el tipo de dato del field.
+
+        Args:
+            measurement: Nombre del measurement a consultar.
+
+        Returns:
+            Dict[str, List[str]]: Diccionario donde las claves son los tipos de datos
+                                 ('float', 'integer', 'string', 'boolean') y los valores
+                                 son listas de nombres de fields con ese tipo.
+
+        Raises:
+            InfluxDBClientError: Si el measurement no existe o hay error de conexión.
+
+        Examples:
+            >>> fields_by_type = influx.get_field_keys_grouped_by_type('sensores')
+            >>> print(fields_by_type)
+            {
+                'float': ['temperatura', 'humedad', 'presion'],
+                'integer': ['contador', 'nivel'],
+                'string': ['estado', 'ubicacion'],
+                'boolean': ['activo', 'alarma']
+            }
+            >>>
+            >>> # Usar para construir queries diferentes por tipo
+            >>> float_fields = fields_by_type.get('float', [])
+            >>> for field in float_fields:
+            ...     print(f"SELECT MEAN({field}) FROM sensores")
+
+        See Also:
+            list_fields: Obtiene lista simple de fields sin agrupar por tipo.
+            build_query_fields: Construye parte de query aplicando operaciones por tipo.
         """
         query = f"SHOW FIELD KEYS FROM \"{measurement}\""
         results = list(self._client.query(query).get_points())
@@ -1218,7 +1587,56 @@ class InfluxdbOperation:
         self, fields: Union[List[str], Dict[str, List[str]]], operation: str
     ) -> Dict[str, str]:
         """
-        Construye una parte de la consulta de InfluxDB aplicando una operacion a cada campo.
+        Construye una parte de la consulta de InfluxDB aplicando una operación a cada campo.
+
+        Este método helper facilita la construcción de queries complejas que aplican
+        operaciones agregadas (MEAN, MAX, MIN, etc.) a múltiples fields, respetando
+        los tipos de datos para evitar errores.
+
+        Args:
+            fields: Lista de nombres de fields O diccionario con fields agrupados por tipo
+                   (como el retornado por get_field_keys_grouped_by_type()).
+            operation: Operación de InfluxDB a aplicar ('MEAN', 'MAX', 'MIN', 'SUM',
+                      'COUNT', 'FIRST', 'LAST', etc.).
+
+        Returns:
+            Dict[str, str]: Diccionario con las partes construidas de la query.
+                           Si fields es List, retorna {'fields': 'MEAN("temp") AS "temp", ...'}.
+                           Si fields es Dict, retorna {tipo: query_string} para cada tipo.
+
+        Examples:
+            Con lista simple de fields:
+
+            >>> fields = ['temperatura', 'humedad', 'presion']
+            >>> query_parts = influx.build_query_fields(fields, 'MEAN')
+            >>> print(query_parts['fields'])
+            MEAN("temperatura") AS "temperatura", MEAN("humedad") AS "humedad", MEAN("presion") AS "presion"
+
+            Con fields agrupados por tipo (no aplica operación a boolean/integer):
+
+            >>> fields_by_type = {
+            ...     'float': ['temperatura', 'humedad'],
+            ...     'integer': ['contador'],
+            ...     'boolean': ['activo']
+            ... }
+            >>> query_parts = influx.build_query_fields(fields_by_type, 'MEAN')
+            >>> print(query_parts['float'])
+            MEAN("temperatura") AS "temperatura", MEAN("humedad") AS "humedad"
+            >>> print(query_parts['integer'])
+            "contador"
+            >>> print(query_parts['boolean'])
+            "activo"
+
+            Uso en query completa:
+
+            >>> fields = influx.get_field_keys_grouped_by_type('sensores')
+            >>> query_parts = influx.build_query_fields(fields, 'MEAN')
+            >>> select_clause = ', '.join(query_parts.values())
+            >>> query = f"SELECT {select_clause} FROM sensores WHERE time > now() - 1h"
+
+        See Also:
+            get_field_keys_grouped_by_type: Obtiene fields agrupados por tipo.
+            query_builder: Constructor de queries más completo.
         """
         query_fields = defaultdict(str)
 

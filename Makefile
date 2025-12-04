@@ -32,6 +32,7 @@ include makefiles/quality.mk
 include makefiles/docker.mk
 include makefiles/build.mk
 include makefiles/clean.mk
+include makefiles/docs.mk
 include makefiles/workflows.mk
 
 # Declarar todos los PHONYs (evita conflictos con archivos del mismo nombre)
@@ -65,6 +66,9 @@ help: ## 📚 Mostrar esta ayuda con todos los comandos disponibles
 	@echo ""
 	@echo "$(BLUE)🧹 LIMPIEZA:$(NC)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' makefiles/clean.mk | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(BLUE)📚 DOCUMENTACIÓN:$(NC)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' makefiles/docs.mk | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(BLUE)🔄 WORKFLOWS:$(NC)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' makefiles/workflows.mk | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'

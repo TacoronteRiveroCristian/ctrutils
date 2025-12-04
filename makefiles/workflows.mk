@@ -3,10 +3,10 @@
 
 .PHONY: ci dev all check status
 
-ci: lint type-check test-coverage ## Simular CI localmente (lint + type-check + tests con coverage)
+ci: lint type-check test-coverage docs-check ## Simular CI localmente (lint + type-check + tests con coverage + docs)
 	$(call print_green,✅ CI local completado exitosamente)
 
-dev: install-dev docker-influxdb ## Setup completo para desarrollo
+dev: install-dev docs-install docker-influxdb ## Setup completo para desarrollo
 	@echo ""
 	$(call print_green,✅ Entorno de desarrollo configurado)
 	@echo ""

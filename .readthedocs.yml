@@ -1,0 +1,54 @@
+# Read the Docs configuration file
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+
+# Required
+version: 2
+
+# Build settings
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.12"
+  jobs:
+    post_checkout:
+      # Post-checkout hooks (if needed)
+      - git fetch --unshallow || true
+    pre_build:
+      # Pre-build commands
+      - echo "Installing dependencies with Poetry..."
+    post_build:
+      # Post-build commands (if needed)
+      - echo "Build completed successfully"
+
+# Python configuration
+python:
+  install:
+    # Install project with Poetry
+    - requirements: docs_source/requirements.txt
+    - method: pip
+      path: .
+
+# Sphinx configuration
+sphinx:
+  configuration: docs_source/conf.py
+  builder: html
+  fail_on_warning: false  # Set to true after fixing all warnings
+
+# Formats to build (PDF, EPUB, etc.)
+formats:
+  - pdf
+  - epub
+
+# Submodules configuration (if needed)
+submodules:
+  include: []
+  recursive: false
+
+# Search configuration
+search:
+  ranking:
+    api/influxdb.html: 3
+    api/scheduler.html: 3
+    guides/quickstart.html: 5
+  ignore:
+    - changelog.html
